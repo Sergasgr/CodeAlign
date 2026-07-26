@@ -8,11 +8,21 @@ dependencies = [
     "bitsandbytes>=0.50.0",
     "datasets>=5.0.0",
     "peft>=0.19.1",
+    "python-dotenv>=1.2.2",
     "ruff>=0.16.0",
     "torch>=2.13.0",
     "transformers>=5.14.1",
     "trl>=1.9.1",
     "wandb>=0.28.1",
+]
+
+# Optional: TRL's built-in Unsloth integration for SFT/DPO can cut training
+# time roughly in half and reduce memory use substantially on a single GPU —
+# worth it given the compute budget in the README. Install with:
+#   uv sync --extra speed
+[project.optional-dependencies]
+speed = [
+    "unsloth",
 ]
 
 [dependency-groups]

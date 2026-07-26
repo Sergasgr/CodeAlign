@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Environment / secrets
+.env
+
+# Data & model artifacts (keep folder structure, not contents)
+data/raw/*
+data/curated/*
+data/preferences/*
+!data/raw/.gitkeep
+!data/curated/.gitkeep
+!data/preferences/.gitkeep
+checkpoints/
+*.gguf
+*.safetensors
+*.bin
+
+# Experiment tracking
+wandb/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
