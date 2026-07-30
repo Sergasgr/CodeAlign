@@ -502,14 +502,23 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "bitsandbytes" },
+    { name = "cpplint" },
     { name = "datasets" },
+    { name = "httpx" },
+    { name = "lizard" },
     { name = "peft" },
     { name = "python-dotenv" },
+    { name = "radon" },
     { name = "ruff" },
     { name = "torch" },
     { name = "transformers" },
     { name = "trl" },
     { name = "wandb" },
+]
+
+[package.optional-dependencies]
+speed = [
+    { name = "unsloth" },
 ]
 
 [package.dev-dependencies]
@@ -521,15 +530,21 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bitsandbytes", specifier = ">=0.50.0" },
+    { name = "cpplint", specifier = ">=2.0.2" },
     { name = "datasets", specifier = ">=5.0.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "lizard", specifier = ">=1.23.0" },
     { name = "peft", specifier = ">=0.19.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "radon", specifier = ">=6.0.1" },
     { name = "ruff", specifier = ">=0.16.0" },
     { name = "torch", specifier = ">=2.13.0" },
     { name = "transformers", specifier = ">=5.14.1" },
     { name = "trl", specifier = ">=1.9.1" },
+    { name = "unsloth", marker = "extra == 'speed'" },
     { name = "wandb", specifier = ">=0.28.1" },
 ]
+provides-extras = ["speed"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -553,6 +568,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/4c/13/7d740c5849255756bc17888787313b61fd38a0a8304fc4f073dfc46122aa/comm-0.2.3.tar.gz", hash = "sha256:2dc8048c10962d55d7ad693be1e7045d891b7ce8d999c97963a5e3e99c055971", size = 6319, upload-time = "2025-07-25T14:02:04.452Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/97/891a0971e1e4a8c5d2b20bbe0e524dc04548d2307fee33cdeba148fd4fc7/comm-0.2.3-py3-none-any.whl", hash = "sha256:c615d91d75f7f04f095b30d1c1711babd43bdc6419c1be9886a85f2f4e489417", size = 7294, upload-time = "2025-07-25T14:02:02.896Z" },
+]
+
+[[package]]
+name = "cpplint"
+version = "2.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/83/47a9e7513ba4d943a9dac2f6752b444377c91880f4f4968799b4f42d89cc/cpplint-2.0.2.tar.gz", hash = "sha256:8a5971e4b5490133e425284f0c566c7ade0b959e61018d2c9af3ff7f357ddc57", size = 373781, upload-time = "2025-04-08T01:22:26.017Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/65/08d3a5039b565231c501b31d1a973d4222e9803c03b2c31a9c08bdec3e30/cpplint-2.0.2-py3-none-any.whl", hash = "sha256:7ec188b5a08e604294ae7e7f88ec3ece2699de857f0533b305620c8cf237cad5", size = 81987, upload-time = "2025-04-08T01:22:24.101Z" },
 ]
 
 [[package]]
@@ -1331,6 +1355,31 @@ wheels = [
 ]
 
 [[package]]
+name = "lizard"
+version = "1.23.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pathspec" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5b/94/4967d0868e7db39a72fa2dbef9a798c4d661178f3836bfec58091606f0f3/lizard-1.23.0.tar.gz", hash = "sha256:ed75cd45f086a2f51d6be64b0149b71bda820f92f95e30898254528bb949f795", size = 92659, upload-time = "2026-06-02T06:17:27.383Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/d9/25e62cbb9c4077a2dabc73e5f34dc947887f4fe1526f53d2c0489abfc186/lizard-1.23.0-py2.py3-none-any.whl", hash = "sha256:e9111e35c8a5f2e00d55cab318fca3504622991417411ea16cf46874fb752f42", size = 100830, upload-time = "2026-06-02T06:17:26.076Z" },
+]
+
+[[package]]
+name = "mando"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/35/24/cd70d5ae6d35962be752feccb7dca80b5e0c2d450e995b16abd6275f3296/mando-0.7.1.tar.gz", hash = "sha256:18baa999b4b613faefb00eac4efadcf14f510b59b924b66e08289aa1de8c3500", size = 37868, upload-time = "2022-02-24T08:12:27.316Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/f0/834e479e47e499b6478e807fb57b31cc2db696c4db30557bb6f5aea4a90b/mando-0.7.1-py2.py3-none-any.whl", hash = "sha256:26ef1d70928b6057ee3ca12583d73c63e05c49de8972d620c278a7b206581a8a", size = 28149, upload-time = "2022-02-24T08:12:25.24Z" },
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1939,6 +1988,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pathspec"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6fd36efb827202a2d997a375e160a71eb2888a925aac1/pathspec-1.1.1.tar.gz", hash = "sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a", size = 135180, upload-time = "2026-04-27T01:46:08.907Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
+]
+
+[[package]]
 name = "peft"
 version = "0.19.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2460,6 +2518,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c4/59/a5f38970f9bf07cee96128de79590bb354917914a9be11272cfc7ff26af0/pyzmq-27.1.0-cp314-cp314t-win32.whl", hash = "sha256:1f0b2a577fd770aa6f053211a55d1c47901f4d537389a034c690291485e5fe92", size = 587472, upload-time = "2025-09-08T23:08:58.18Z" },
     { url = "https://files.pythonhosted.org/packages/70/d8/78b1bad170f93fcf5e3536e70e8fadac55030002275c9a29e8f5719185de/pyzmq-27.1.0-cp314-cp314t-win_amd64.whl", hash = "sha256:19c9468ae0437f8074af379e986c5d3d7d7bfe033506af442e8c879732bedbe0", size = 661401, upload-time = "2025-09-08T23:08:59.802Z" },
     { url = "https://files.pythonhosted.org/packages/81/d6/4bfbb40c9a0b42fc53c7cf442f6385db70b40f74a783130c5d0a5aa62228/pyzmq-27.1.0-cp314-cp314t-win_arm64.whl", hash = "sha256:dc5dbf68a7857b59473f7df42650c621d7e8923fb03fa74a526890f4d33cc4d7", size = 575170, upload-time = "2025-09-08T23:09:01.418Z" },
+]
+
+[[package]]
+name = "radon"
+version = "6.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama" },
+    { name = "mando" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/6d/98e61600febf6bd929cf04154537c39dc577ce414bafbfc24a286c4fa76d/radon-6.0.1.tar.gz", hash = "sha256:d1ac0053943a893878940fedc8b19ace70386fc9c9bf0a09229a44125ebf45b5", size = 1874992, upload-time = "2023-03-26T06:24:38.868Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/93/f7/d00d9b4a0313a6be3a3e0818e6375e15da6d7076f4ae47d1324e7ca986a1/radon-6.0.1-py2.py3-none-any.whl", hash = "sha256:632cc032364a6f8bb1010a2f6a12d0f14bc7e5ede76585ef29dc0cecf4cd8859", size = 52784, upload-time = "2023-03-26T06:24:33.949Z" },
 ]
 
 [[package]]
@@ -3077,6 +3148,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/92/ff/5a28bdfd8c3ebec42564ac7d0e54ca3db65044a9314a97f9564fa7a1e926/tzdata-2026.3.tar.gz", hash = "sha256:4a1518b8993086a7982523e071643f3c0e5f213e75b21318e78bcabfff9d1415", size = 198674, upload-time = "2026-07-10T08:50:37.887Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/6d/b53b99a9f2766d095985947a5782f1702cabb129a34f7a802d7197af832f/tzdata-2026.3-py2.py3-none-any.whl", hash = "sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931", size = 348168, upload-time = "2026-07-10T08:50:36.46Z" },
+]
+
+[[package]]
+name = "unsloth"
+version = "2024.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/98/57bdb80e3c935280417e59d20146243437fd5230306a4fbbf185d4d7d015/unsloth-2024.8.tar.gz", hash = "sha256:20f555588d16811a2e585636551bd31fde526b92d5f336b8501d9dc8daa47f8d", size = 2710338, upload-time = "2024-08-04T18:30:15.109Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/db/06d70295c863a245a46dd8423135133d77537d513420b5558dfa8f9f5cac/unsloth-2024.8-py3-none-any.whl", hash = "sha256:da2ee4de96a10b7489723dc5d3c6a2ef383774f7cf249abe44919c615ae8df49", size = 136628, upload-time = "2024-08-04T18:30:12.985Z" },
 ]
 
 [[package]]
