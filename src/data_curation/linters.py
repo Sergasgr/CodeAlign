@@ -2,7 +2,7 @@ import tempfile
 import subprocess
 import lizard
 
-def ruff_check(code: str) -> int: # Score: [0-1]? Establecer criterio de puntuación
+def ruff_check(code: str) -> int: 
     with tempfile.NamedTemporaryFile(suffix=".py", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
         tmp.flush()
@@ -14,7 +14,6 @@ def ruff_check(code: str) -> int: # Score: [0-1]? Establecer criterio de puntuac
     if not out:
         return 0
     return len(out.split('\n'))
-    # SCORE = score = max(0, 1 - (errores * 0.1))?
 
 def cpplint_check(code: str) -> int:
     with tempfile.NamedTemporaryFile(suffix=".cpp", delete=True) as tmp:
@@ -26,6 +25,13 @@ def cpplint_check(code: str) -> int:
         )
     return len([line for line in result.stderr.splitlines() if "Artifact" not in line and "Total errors found" not in line and line.strip()])
 
+def get_cyclomatic_complexity(code: str) -> int:
+    info = lizard.analyze_source_code("snippet.txt", code)
+    if not info.function_list:
+        return 0
+    return max(func.cyclomatic_complexity for func in info.function_list)
+
+"""
 def eslint_check(code: str) -> int:
     with tempfile.NamedTemporaryFile(suffix=".js", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
@@ -77,9 +83,4 @@ def golangci_lint_check(code: str) -> int: #considerar si golangci-lint o revive
     if not out:
         return 0
     return len(out.split('\n'))
-
-def get_cyclomatic_complexity(code: str) -> int:
-    info = lizard.analyze_source_code("snippet.txt", code)
-    if not info.function_list:
-        return 0
-    return max(func.cyclomatic_complexity for func in info.function_list)
+"""
