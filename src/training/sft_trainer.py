@@ -1,18 +1,28 @@
-import wandb 
 import os
+import torch
+import wandb 
 from dotenv import load_dotenv
 from datasets import load_dataset
-from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
-import torch
 from peft import LoraConfig
-from trl.trainer.sft_config import SFTConfig
-from trl.trainer.sft_trainer import SFTTrainer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from trl import SFTConfig, SFTTrainer # type: ignore
 
-from configs.config import (
-    DS_PATH, TOKENIZER_MODEL, SFT_MODEL, SFT_OUTPUT_DIR,
-    LORA_R, LORA_ALPHA, LORA_DROPOUT, LEARNING_RATE, 
-    PER_DEVICE_BATCH_SIZE, GRAD_ACCUMULATION_STEPS, MAX_SEQ_LENGTH,
-    SAVE_STEPS, SAVE_TOTAL_LIMIT, WANDB_RUN_NAME
+from src.data_curation.curation_config import DS_PATH
+from src.training.sft_config import (
+    GRAD_ACCUMULATION_STEPS,
+    LEARNING_RATE,
+    LORA_ALPHA,
+    LORA_DROPOUT,
+    LORA_R,
+    MAX_SEQ_LENGTH,
+    NUM_TRAIN_EPOCHS,
+    PER_DEVICE_BATCH_SIZE,
+    SAVE_STEPS,
+    SAVE_TOTAL_LIMIT,
+    SFT_MODEL,
+    SFT_OUTPUT_DIR,
+    TOKENIZER_MODEL,
+    WANDB_RUN_NAME,
 )
 
 load_dotenv()
@@ -30,7 +40,7 @@ dataset = load_dataset(
     "json",
     data_files=str(DS_PATH), 
     split="train"
-) # num_proc?
+) 
 
 tokenizer = AutoTokenizer.from_pretrained(
     TOKENIZER_MODEL,        
@@ -53,7 +63,7 @@ model = AutoModelForCausalLM.from_pretrained(
     use_cache=False
 )
 
-config = LoraConfig( 
+peft_config = LoraConfig( 
     r=LORA_R,
     lora_alpha=LORA_ALPHA,
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
@@ -62,15 +72,16 @@ config = LoraConfig(
 )
 
 training_args = SFTConfig( 
-    output_dir=SFT_OUTPUT_DIR, 
+    output_dir=str(SFT_OUTPUT_DIR), 
     save_strategy="steps",
-    save_steps=SAVE_STEPS, # o 100
-    save_total_limit=SAVE_TOTAL_LIMIT, # o 3
+    save_steps=SAVE_STEPS,
+    save_total_limit=SAVE_TOTAL_LIMIT,
+    num_train_epochs=NUM_TRAIN_EPOCHS,
     per_device_train_batch_size=PER_DEVICE_BATCH_SIZE,         
     gradient_accumulation_steps=GRAD_ACCUMULATION_STEPS,          
     bf16=True,                             
     learning_rate=LEARNING_RATE,                  
-    max_seq_length=MAX_SEQ_LENGTH, # No parameter named "max_seq_length"                   
+    max_length=MAX_SEQ_LENGTH,                  
     logging_steps=10,                     
     report_to="wandb",                     
     gradient_checkpointing=True,            
@@ -87,12 +98,15 @@ wandb.init(
 trainer = SFTTrainer(
     model=model,
     train_dataset=dataset,  
-    peft_config=config,
-    tokenizer=tokenizer, # No parameter named "tokenizer"
+    peft_config=peft_config,
+    processing_class=tokenizer, 
     args=training_args,
 )
 
 trainer.train()
 
-trainer.save_model(f"{SFT_OUTPUT_DIR}/final_model")
+final_dir = f"{SFT_OUTPUT_DIR}/final_model"
+trainer.save_model(final_dir)
+tokenizer.save_pretrained(final_dir)
+
 wandb.finish()

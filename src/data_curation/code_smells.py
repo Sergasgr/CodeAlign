@@ -1,39 +1,70 @@
-def check_internal_duplication(code: str, window_size: int = 4) -> tuple[bool, str]: 
+import re
+
+IGNORED_LINES = {
+    "{", "}", "(", ")", "[", "]", ";",
+    "},", "];", ");", "};",
+ 
+    "break", "break;", "continue", "continue;", "pass", "else", "else:",
+    "try", "try:", "try {", "finally", "finally:", "finally {",
+ 
+    "return", "return;", "return true", "return true;", "return false", "return false;",
+    "return 0", "return 0;", "return 1", "return 1;", "return null", "return null;",
+    "return none", "return undefined", "return undefined;", "return nullptr", "return nullptr;",
+ 
+    "public:", "private:", "protected:",
+    "default:",
+    "except:",
+ 
+    "if err != nil {", "return err", "return err;", "return nil", "return nil;",
+    "defer", "panic(err)",
+ 
+    "ok(())", "ok(())?", "err(e)", "_ => {}", "none => {}",
+}
+CATCH_PATTERN = re.compile(r"^catch\s*\(.*\)\s*\{?$", re.IGNORECASE)
+
+def check_internal_duplication( 
+    code: str,
+    window_size: int = 12,
+    density_threshold: float = 0.2,
+) -> tuple[bool, str]:
     meaningful_lines = []
     for line in code.split("\n"):
         stripped = line.strip()
-        if stripped and stripped not in ('{', '}', '(', ')', '[', ']', ';'):
-            meaningful_lines.append(stripped)
+        if not stripped:
+            continue
+        if stripped.lower() in IGNORED_LINES:
+            continue
+        if CATCH_PATTERN.match(stripped):
+            continue
+        meaningful_lines.append(stripped)
+        
     if len(meaningful_lines) < window_size * 2:
         return False, ""
-    blocks = set()
+    
+    seen: set[tuple[str, ...]] = set()
+    duplicated_line_count = 0
     for i in range(len(meaningful_lines) - window_size + 1):
         block = tuple(meaningful_lines[i : i + window_size])
-        if block in blocks:
-            error_msg = f"Internal duplication detected: {window_size} lines repeated."
-            return True, error_msg
-        blocks.add(block)
+        if block in seen:
+            duplicated_line_count += window_size
+        seen.add(block)
+        
+    density = duplicated_line_count / len(meaningful_lines)
+    if density > density_threshold:
+        return True, (
+            f"Internal duplication: ~{density:.0%} of the file is inside "
+            f"repeated {window_size}+ line blocks"
+        )
     return False, ""
 
 """
-- Observación: diferenciar entre repetición estructural (necesaria) y repetición semántica (el verdadero code smell). Si pones una ventana de 3 o 4 líneas, te vas a cargar medio dataset. Eso no es código espagueti ni una violación del principio DRY (Don't Repeat Yourself); son cláusulas de guarda (guard clauses) o manejo de errores estándar. Penalizar a un modelo por escribir eso sería un error garrafal, porque es código idiomático y seguro.
-- Análisis:
-¿Cómo valoramos realmente un "Code Smell" por duplicación?
+¿Es realmente una buena forma de prevenir code smells y DRY?
 
-En la industria (por ejemplo, herramientas profesionales como SonarQube o el Copy/Paste Detector de PMD), un bloque repetido solo se considera un smell si cumple ciertos criterios de "peso". Para tu función check_internal_duplication, aquí tienes las estrategias para que sea un filtro inteligente y no una guillotina ciega:
+Honestamente: es una barrera rápida y razonable para v1, pero no un detector de clones de verdad — y vale la pena que sepas exactamente dónde está el límite en vez de sobrevenderlo:
 
-1. El tamaño de la ventana (Window Size) debe ser sustancial
-Un copy-paste dañino (aquel que debió ser abstraído en una función de ayuda) rara vez tiene 3 líneas. Suele ser un bloque lógico completo: la configuración de una conexión, un bucle de transformación de datos complejo, etc.
+Solo detecta copias exactas (Type-1). Un bloque copiado y pegado con una sola variable renombrada ya no hace match — y copy-paste-y-renombrar es, en la práctica, el patrón de duplicación más común, más que la copia byte a byte. Detectar eso necesitaría normalizar identificadores antes de comparar (una pasada "ciega a nombres de variable"), que esto no hace.
+Solo detecta bloques contiguos. Si la lógica duplicada está repartida con código distinto en medio, no la pilla.
+El comentario que ya tenías sobre el doble conteo de ventanas solapadas sigue siendo válido — es una aproximación, no una métrica de precisión.
 
-La solución: Subir el window_size a un mínimo de 10 a 15 líneas de código "limpio" (sin contar llaves ni blancos). Si un desarrollador repite 10 líneas exactas en el mismo archivo, definitivamente debió hacer un refactor.
-
-2. Filtrado de líneas "basura" o comunes
-Tu limpieza inicial quitaba llaves y paréntesis, lo cual está muy bien. Pero para evitar falsos positivos con estructuras de control básicas, debes ampliar tu lista negra de líneas ignoradas.
-
-La solución: Antes de añadir una línea a tu lista de meaningful_lines, ignora (haz skip) de líneas que sean exactamente return, return True, return False, break, continue, pass, o que solo contengan sentencias else:.
-
-3. Densidad vs. Aparición (Opcional, más avanzado)
-A veces, un archivo de 500 líneas tiene un bloque de 10 líneas repetido por cuestiones de arquitectura, y el 98% restante del código es brillante.
-
-La solución: En lugar de devolver True a la primera coincidencia, puedes contar cuántas líneas caen dentro de bloques duplicados y dividirlo por el total de líneas. Si la duplicación representa más de un 15-20% del código total, lo rechazas.
+Mi recomendación: déjalo así para la Fase 1 (rápido, sin dependencias, cero falsos positivos añadidos), y si el reporte de la Fase 1 muestra que se te está colando duplicación real tipo copy-paste-renombrado, ahí sí merece la pena añadir la normalización de identificadores — como mejora dirigida por evidencia, no especulativa.
 """

@@ -1,0 +1,24 @@
+from src.data_curation.curation_config import BASE_DIR
+
+# SFT MODELS
+TOKENIZER_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct" 
+SFT_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct"
+
+# SFT PATHS
+MODELS_DIR = BASE_DIR / "models"
+SFT_OUTPUT_DIR = BASE_DIR / "checkpoints" / "sft"
+
+# SFT HYPERPARAMETERS 
+LORA_R = 16
+LORA_ALPHA = 32
+LORA_DROPOUT = 0.1
+LEARNING_RATE = 2e-4
+PER_DEVICE_BATCH_SIZE = 2
+GRAD_ACCUMULATION_STEPS = 8
+NUM_TRAIN_EPOCHS = 3 
+MAX_SEQ_LENGTH = 2048
+SAVE_STEPS = 100
+SAVE_TOTAL_LIMIT = 3
+
+# WANDB CONFIG
+WANDB_RUN_NAME = "sft-qwen2.5-coder-7b-golden-recipe"

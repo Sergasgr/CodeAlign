@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "bitsandbytes>=0.50.0",
+    "cpplint>=2.0.2",
     "datasets>=5.0.0",
     "datasketch>=2.0.0",
     "lizard>=1.23.0",

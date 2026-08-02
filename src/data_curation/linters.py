@@ -2,18 +2,26 @@ import tempfile
 import subprocess
 import lizard
 
+LIZARD_EXTENSION = {
+    "python": ".py",
+    "java": ".java",
+    "cpp": ".cpp",
+    "c_sharp": ".cs",
+    "javascript": ".js",
+    "typescript": ".ts",
+}
+
 def ruff_check(code: str) -> int: 
     with tempfile.NamedTemporaryFile(suffix=".py", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
         tmp.flush()
         result = subprocess.run(
-            ["ruff", "check", "--select=E,W,F,N", tmp.name], 
-            capture_output=True, text=True
+            ["ruff", "check", "--select=E,W,F,N", "--output-format=concise", tmp.name], 
+            capture_output=True, 
+            text=True
         )
     out = result.stdout.strip()
-    if not out:
-        return 0
-    return len(out.split('\n'))
+    return len(out.split("\n")) if out else 0
 
 def cpplint_check(code: str) -> int:
     with tempfile.NamedTemporaryFile(suffix=".cpp", delete=True) as tmp:
@@ -21,15 +29,14 @@ def cpplint_check(code: str) -> int:
         tmp.flush()
         result = subprocess.run(
             ["cpplint", "--countdown", tmp.name], 
-            capture_output=True, text=True, check=False
+            capture_output=True, 
+            text=True, 
+            check=False
         )
-    return len([line for line in result.stderr.splitlines() if "Artifact" not in line and "Total errors found" not in line and line.strip()])
-
-def get_cyclomatic_complexity(code: str) -> int:
-    info = lizard.analyze_source_code("snippet.txt", code)
-    if not info.function_list:
-        return 0
-    return max(func.cyclomatic_complexity for func in info.function_list)
+    return len([
+        line for line in result.stderr.splitlines() 
+        if "Artifact" not in line and "Total errors found" not in line and line.strip()
+    ])
 
 """
 def eslint_check(code: str) -> int:
@@ -84,3 +91,10 @@ def golangci_lint_check(code: str) -> int: #considerar si golangci-lint o revive
         return 0
     return len(out.split('\n'))
 """
+
+def get_cyclomatic_complexity(code: str, language: str) -> int:
+    ext = LIZARD_EXTENSION.get(language, ".txt")
+    info = lizard.analyze_source_code(f"snippet{ext}", code) # type: ignore
+    if not info.function_list:
+        return 0
+    return max(func.cyclomatic_complexity for func in info.function_list)
