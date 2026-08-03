@@ -9,6 +9,7 @@ dependencies = [
     "cpplint>=2.0.2",
     "datasets>=5.0.0",
     "datasketch>=2.0.0",
+    "docker>=7.2.0",
     "lizard>=1.23.0",
     "peft>=0.19.1",
     "python-dotenv>=1.2.2",

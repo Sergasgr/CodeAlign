@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+RUN useradd -m sandboxuser
+USER sandboxuser
+
+WORKDIR /app
+
+#RUN apt-get update && apt-get install -y \
+    #g++ \
+    #default-jdk \
+    #nodejs \
+    #npm \
+    #&& rm -rf /var/lib/apt/lists/*
+
+# Soporte para TypeScript
+#RUN npm install -g ts-node typescript
+
+#RUN useradd -m sandboxuser
+#USER sandboxuser
+#WORKDIR /app

@@ -1,3 +1,5 @@
+import re
+
 from tree_sitter import Language, Parser
 import tree_sitter_python as tspython
 import tree_sitter_java as tsjava
@@ -56,14 +58,17 @@ def linter_check(code: str, language: str): # SEMANTICAL VALIDITY
             lint_errors = ruff_check(code)
         case "c++" | "cpp" | "c":
             lint_errors = cpplint_check(code)
-        #case "javascript" | "js":
+        #case "javascript" | "js": 
             #lint_errors = eslint_check(code)
         #case "java":
             #lint_errors = pmd_check(code)
+        #case "c_sharp"
+        #case "typescript"
         #case "rust" | "rs":
             #lint_errors = clippy_check(code)
         #case "go":
             #lint_errors = golangci_lint_check(code)
+        
         case _:
             lint_errors = None 
     return {
@@ -118,3 +123,11 @@ def check_code(code: str, language: str):
     result["lint_errors"] = lint_errors
     result["cyclomatic_complexity"] = cycl_complexity
     return result
+
+def parse_code(code: str) -> str:
+    pattern = r"```([a-zA-Z]*)\s*(.*?)```"
+    match = re.search(pattern, code, re.DOTALL)
+    if match:
+        clean_code = match.group(2).strip()
+        return clean_code
+    return code
