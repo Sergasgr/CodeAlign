@@ -12,7 +12,7 @@ The core question this project is testing: does combining execution feedback wit
 
 ## Status
 
-Early stage — Phase 0 (setup and scope) is complete, Phase 1 (data curation) is in progress. See the [Roadmap](#roadmap) below.
+Phase 3 (preference generation) is the current focus. Phases 0–2 are complete; Phase 3 code is written and ready for execution. See the [Roadmap](#roadmap) below.
 
 ## Scope (v1)
 
@@ -47,8 +47,8 @@ Documented up front so the project's resource footprint is explicit, not an afte
 
 - [x] **Phase 0** — Setup & scope
 - [x] **Phase 1** — Data curation (syntax validation + complexity + linting)
-- [ ] **Phase 2** — Supervised fine-tuning (SFT) — see [below](#phase-2--sft-qlora)
-- [ ] **Phase 3** — DPO preference-pair generation (execution feedback + static analysis)
+- [x] **Phase 2** — Supervised fine-tuning (SFT) — see [below](#phase-2--sft-qlora)
+- [x] **Phase 3** — DPO preference-pair generation (execution feedback + static analysis) — see [below](#phase-3--generation-of-preferences-with-composite-reward-for-dpo)
 - [ ] **Phase 4** — DPO training
 - [ ] **Phase 5** — Evaluation (Base vs. SFT vs. DPO + reward-ablation)
 - [ ] **Phase 6** — Interactive demo (side-by-side model comparison)
@@ -65,6 +65,58 @@ Training a pre-trained base model on a curated set of (instruction, code) pairs 
 - **VRAM budget:** QLoRA's 4-bit base (~4.5GB vs. ~14GB in fp16) + gradient checkpointing + a `per_device_train_batch_size=2` / `gradient_accumulation_steps=8` split (effective batch size 16) keeps this inside 24GB — see `notebooks/02_sft_experiments_log.ipynb` for the measured VRAM footprint and W&B loss curves once a run completes.
 - **Evaluation:** [`bigcode-evaluation-harness`](https://github.com/bigcode-project/bigcode-evaluation-harness) — HumanEval (164 hand-written problems; `pass@1` is the fraction solved on the first attempt) — rather than a hand-rolled eval script. Deliberately run from the terminal against a saved checkpoint, not from inside `sft_trainer.py`: training and evaluation stay decoupled, and the same harness invocation gets reused for the DPO checkpoint in Phase 5 for a like-for-like comparison.
 - **Checkpoint:** `checkpoints/sft/final_model` (adapter + tokenizer).
+
+## Phase 3 — Generation of Preferences with Composite Reward for DPO
+
+**Execution-Based Iterative DPO:** you don't need humans to label "Chosen" vs "Rejected." Using automated execution (sandbox) and statistical analysis (linters) to automatically generate preference pairs for DPO. Execution-based feedback provides a deterministic ground truth, eliminating the subjectivity and high cost of human annotation.
+
+The pipeline loops over every prompt in the Phase 1 pristine dataset — generating two candidate completions from the SFT checkpoint (at `temperature=0.7` with `top_p=0.95`, via `num_return_sequences=2`), executing both inside a resource-limited Docker container (`network_disabled`, `mem_limit=128m`), and labelling the pair according to three cases:
+
+1. **Model generates two variations of code for a problem**
+2. **Run both in a sandbox**
+3. The labelling decision:
+   - **Case A — One passes, one fails.**
+     Chosen: the passing one. Rejected: the failing one.
+     DPO update: train the model to prefer the passing logic.
+   - **Case B — Both fail:** discard the pair to prevent noisy gradients.
+   - **Case C — Both pass.** Rank them by quality metrics: cyclomatic complexity and lint score (the composite reward signal). The superior code becomes chosen.
+
+### Composite IDE Reward Signal
+
+Moving beyond binary compilation checks to a multi-dimensional reward system. A binary reward (=1 if execution succeeds without runtime errors, 0 otherwise) encourages "spaghetti code" and doesn't guide the model toward good engineering practices. The solution is a **Composite Reward**:
+
+$$R_{\text{total}} = w_1 R_{\text{exec}} + w_2 R_{\text{static}} + w_3 R_{\text{style}}$$
+
+| Component | Signal | Weight | Purpose |
+|-----------|--------|--------|---------|
+| $R_{\text{exec}}$ | Binary (execution success) | `w₁ = 1.0` | Functional correctness |
+| $R_{\text{static}}$ | Negative, proportional to cyclomatic complexity (continuous) | `w₂ = 0.1` | Code quality metrics — force simplicity and adherence to best practices |
+| $R_{\text{style}}$ | Penalty for violating PEP-8 (ruff) / cpplint conventions | `w₃ = 0.2` | Style adherence |
+
+It aligns the model's objective with the human objective: clean, maintainable, working code. Introducing a continuous penalty for high cyclomatic complexity prevents reward hacking and ensures the model produces maintainable, idiomatic code.
+
+### Dual output (same pattern as Phase 1)
+
+Phase 3 writes two files, mirroring Phase 1's `pristine_dataset.jsonl` / `report_dataset.jsonl` split:
+
+- **`data/preferences/dpo_dataset.jsonl`** — clean pairs (`prompt` / `chosen` / `rejected` only), ready for `DPOTrainer` in Phase 4.
+- **`data/preferences/dpo_report.jsonl`** — every prompt processed (including discarded pairs), with full metadata: case classification (A/B/C), composite scores, cyclomatic complexity, and lint errors for both chosen and rejected candidates, plus language. This is what `notebooks/03_preference_generation_report.ipynb` reads to produce the evidence graphs.
+
+### Tracking
+
+W&B logging follows the same `wandb.init` / `wandb.log` / `wandb.finish` pattern used in Phases 2 and 4. Logged metrics:
+- Case distribution: `case_a`, `case_b`, `case_c`, `case_c_tied`
+- Pair counts: `pairs_generated`, `pairs_discarded`
+- Quality gap: `avg_chosen_score` vs. `avg_rejected_score`, `avg_chosen_cc` vs. `avg_rejected_cc`, `avg_chosen_lint_errors` vs. `avg_rejected_lint_errors`
+
+The Case C percentage is the single most important metric of the project — if it's >15%, the composite reward is actively separating quality among working code, which is the core contribution beyond binary pass/fail.
+
+### Implementation
+
+- **Sandbox:** `DockerSandbox` — ephemeral containers with `network_disabled=True`, `mem_limit=128m`, `timeout` enforcement. Multi-language: Python, JavaScript, TypeScript, Java, C++, Go, Rust (matching Phase 1's language scope). Image: `docker/Dockerfile.executor` (Python 3.11-slim, non-root user, no pip — candidates that import third-party packages fail, which is intended).
+- **Candidate generation:** `CandidateGenerator` — loads the SFT checkpoint (`checkpoints/sft/final_model`) with QLoRA (4-bit NF4), generates `N_CANDIDATES=2` completions per prompt. Code is extracted from markdown fences if present (`parse_code`).
+- **Orchestrator:** `PreferenceOrchestrator` — wires generation → execution → scoring → labelling. Reuses Phase 1's `linter_check()` and `get_cyclomatic_complexity()` for the static-analysis components of the composite reward.
+- **Report notebook:** `notebooks/03_preference_generation_report.ipynb` — case distribution (bar + pie), composite score histograms (chosen vs. rejected), cyclomatic complexity boxplots, lint error boxplots, per-language breakdown, qualitative samples.
 
 ## Phase 7 — stretch extensions
 
@@ -92,10 +144,16 @@ codealign/
 ├── data/
 │   ├── raw/            # untouched source data
 │   ├── curated/        # syntax + complexity + lint validated SFT data (Phase 1)
+│   │   ├── pristine_dataset.jsonl  # accepted samples (SFT training data)
+│   │   ├── rejected_dataset.jsonl  # filtered-out samples
+│   │   └── report_dataset.jsonl    # all samples with full metadata (notebook)
 │   └── preferences/    # chosen/rejected pairs for DPO (Phase 3)
+│       ├── dpo_dataset.jsonl       # clean pairs for DPOTrainer
+│       └── dpo_report.jsonl        # all results with full metadata (notebook)
 ├── notebooks/
 │   ├── 01_curation_report.ipynb     # Phase 1 curation report (accepted/rejected, by language, by prompt type)
-│   └── 02_sft_experiments_log.ipynb # Phase 2 lab journal + evaluation harness runs
+│   ├── 02_sft_experiments_log.ipynb # Phase 2 lab journal + evaluation harness runs
+│   └── 03_preference_generation_report.ipynb # Phase 3 case distribution, quality metrics, samples
 ├── src/
 │   ├── __init__.py
 │   ├── data_curation/       # Phase 1
@@ -105,14 +163,21 @@ codealign/
 │   │   ├── code_smells.py   # internal (within-sample) duplication
 │   │   ├── minhash.py       # cross-sample near-duplicate index
 │   │   └── main.py          # loads CommitPackFT, runs the pipeline
+│   ├── preference_generation/ # Phase 3
+│   │   ├── preference_generation_config.py  # model, sandbox, reward weights, W&B
+│   │   ├── candidate_generator.py           # dual-temperature generation from SFT checkpoint
+│   │   ├── docker_sandbox.py                # isolated execution (multi-language)
+│   │   ├── preference_orchestrator.py       # A/B/C labelling + composite reward
+│   │   └── main.py                          # pipeline entry point, W&B tracking
 │   ├── training/             # Phase 2 & 4 — each phase owns its config.py,
 │   │   ├── config.py         # same pattern as data_curation/config.py, not
 │   │   ├── sft_trainer.py    # a shared configs/ folder (see Phase 2 notes)
-│   │   └── dpo_trainer.py    # (Phase 4, not built yet)
+│   │   └── dpo_trainer.py
 │   └── evaluation/           # benchmarks, ablation (Phase 5)
 ├── tests/
 ├── scripts/             # thin CLI wrappers per phase, e.g. 01_curate_data.sh
-└── docker/              # demo (Phase 6) / execution daemon + multi-toolchain linting (Phase 7)
+└── docker/
+    └── Dockerfile.executor  # Phase 3 sandbox image (python:3.11-slim, non-root, no pip)
 ```
 
 ## Setup
@@ -125,6 +190,16 @@ cp .env.example .env   # fill in WANDB_API_KEY and HF_TOKEN
 
 # Phase 1 — curate the dataset
 scripts/01_curate_data.sh
+
+# Phase 2 — SFT training
+uv run python -m src.training.sft_trainer
+
+# Phase 3 — generate DPO preference pairs
+docker build -f docker/Dockerfile.executor -t codealign-executor:latest .
+uv run python -m src.preference_generation.main
+
+# Phase 4 — DPO training
+uv run python -m src.training.dpo_trainer
 ```
 
 ## License

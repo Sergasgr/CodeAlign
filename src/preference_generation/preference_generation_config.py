@@ -18,3 +18,17 @@ EXECUTION_TIMEOUT = 2
 W_EXEC = 1.0 
 W_COMPLEXITY = 0.1 
 W_LINT = 0.2 
+
+""" ¿Fase 5?
+Paso 0: El Checkpoint de Ablación (El Prerrequisito)
+
+Antes de evaluar, necesitas tener qué evaluar. Para que tu hipótesis tenga validez empírica, debes generar un modelo de control.
+Lo que debes hacer: Modificar temporalmente tu preference_generation_config.py para poner W_COMPLEXITY = 0 y W_LINT = 0 y dejar solo W_EXEC = 1.0.
+Ejecución: Correr tu pipeline de las fases 3 y 4 con esta configuración para obtener un modelo que llamaremos checkpoints/dpo_ablation/final_model.
+"""
+
+# PREFERENCE GENERATION REPORT
+DPO_REPORT = "data/preferences/dpo_report.jsonl"
+
+# WANDB CONFIG
+WANDB_RUN_NAME = "phase3-preference-generation"

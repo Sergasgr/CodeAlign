@@ -2,7 +2,7 @@ import docker
 from docker.errors import ContainerError, ImageNotFound, APIError
 from src.preference_generation.preference_generation_config import SANDBOX_IMAGE_NAME, EXECUTION_TIMEOUT
 
-class UnsopportedLanguage(Exception):
+class UnsupportedLanguage(Exception):
     pass
 
 def code_command(code: str, language: str, timeout_seconds: int = EXECUTION_TIMEOUT): 
@@ -24,7 +24,7 @@ def code_command(code: str, language: str, timeout_seconds: int = EXECUTION_TIME
         case "rust" | "rs":
             return ["sh", "-c", f"echo '{code}' > main.rs && rustc main.rs && timeout {timeout_seconds} ./main"]
         case _:
-            raise UnsopportedLanguage(f"Unsupported language: {language}")
+            raise UnsupportedLanguage(f"Unsupported language: {language}")
             
 class DockerSandbox:
     def __init__(self, image_name: str = SANDBOX_IMAGE_NAME):
@@ -71,7 +71,7 @@ class DockerSandbox:
                 "stdout": "",
                 "stderr": f"Docker API Error: {str(e)}"
             }
-        except UnsopportedLanguage as e:
+        except UnsupportedLanguage as e:
             return {
                 "success": False,
                 "stdout": "",
