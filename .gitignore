@@ -14,9 +14,11 @@ venv/
 data/raw/*
 data/curated/*
 data/preferences/*
+data/evaluation/*
 !data/raw/.gitkeep
 !data/curated/.gitkeep
 !data/preferences/.gitkeep
+!data/evaluation/.gitkeep
 checkpoints/
 *.gguf
 *.safetensors
@@ -27,6 +29,9 @@ wandb/
 
 # Notebooks
 .ipynb_checkpoints/
+
+# Rust build artifacts
+rust-daemon/target/
 
 # OS
 .DS_Store

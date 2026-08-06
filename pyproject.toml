@@ -1,7 +1,7 @@
 [project]
 name = "codealign"
 version = "0.1.0"
-description = "Add your description here"
+description = "Iterative post-training pipeline for coding LLMs — SFT + DPO with composite (execution + static analysis) reward signal"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

@@ -23,4 +23,4 @@ Imagen Docker con Toolchains Nativos y Multi-lenguaje (Go y Rust completos):
     Objetivo: Construir un entorno Docker especializado que incluya linters nativos no instalables por pip: eslint (Node), analizador compatible con PMD (JDK), clippy (Rust) y golangci-lint (Go).
 
     Por qué: Permite habilitar Go y Rust como lenguajes de primera clase con señal de linter completa, alineándose perfectamente con el ecosistema de IDEs de JetBrains (GoLand, RustRover), ampliando la cobertura de 6 a 8 lenguajes.
-1*/
+*/

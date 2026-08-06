@@ -9,8 +9,6 @@ import tree_sitter_javascript as tsjavascript
 import tree_sitter_typescript as tstypescript
 import tree_sitter_go as tsgo
 import tree_sitter_rust as tsrust
-# import tree_sitter_go as tsgo
-# import tree_sitter_rust as tsrust
 
 from src.data_curation.code_smells import check_internal_duplication
 from src.data_curation.curation_config import (

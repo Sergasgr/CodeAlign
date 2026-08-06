@@ -17,43 +17,10 @@ from demo.demo_config import (
     SERVER_PORT,
 )
 
-"""
-from pydantic import BaseModel
-
-class GenerateRequest(BaseModel):
-    prompt: str
-
-class ModelResult(BaseModel):
-    code: str
-    complexity: float
-    lint_errors: int
-
-class ComparisonResponse(BaseModel):
-    base: ModelResult
-    sft: ModelResult
-    dpo: ModelResult
-    
-def generate_comparison(prompt: str):
-    # --- 1. BASE MODEL ---
-    model.disable_adapters() # Object of type "Tensor" is not callable: Attribute "__call__" is unknown
-    base_code = execute_model(prompt) 
-    base_metrics = linter_check(base_code, "python")
-    
-    # --- 2. SFT MODEL ---
-    model.set_adapter("sft")
-    sft_code = execute_model(prompt)
-    sft_metrics = linter_check(sft_code, "python")
-    
-    model.set_adapter("dpo")
-    dpo_code = execute_model(prompt)
-    dpo_metrics = linter_check(dpo_code, "python")
-    
-    return (
-        base_code, format_metrics(base_metrics),
-        sft_code, format_metrics(sft_metrics),
-        dpo_code, format_metrics(dpo_metrics)
-    )
-"""
+# ¿Va a ir cargando todos los modelos? ¿No debería hacer? -> 
+# model.disable_adapters()
+# model.set_adapter("sft")
+# model.set_adapter("dpo")
 
 print("Loading tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
@@ -152,7 +119,7 @@ EXAMPLES = [
 
 with gr.Blocks(
     title="CodeAlign — Base vs. SFT vs. DPO",
-    theme=gr.themes.Soft(),
+    theme=gr.themes.Soft(), # type: ignore
 ) as demo:
     gr.Markdown(
         "# 🔬 CodeAlign — Side-by-Side Model Comparison\n"
@@ -186,7 +153,7 @@ with gr.Blocks(
 
     gr.Examples(examples=EXAMPLES, inputs=prompt_input)
 
-    run_btn.click(
+    run_btn.click( # type: ignore
         fn=compare,
         inputs=prompt_input,
         outputs=[base_code, base_metrics, sft_code, sft_metrics, dpo_code, dpo_metrics],
