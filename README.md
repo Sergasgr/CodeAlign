@@ -12,7 +12,7 @@ The core question this project is testing: does combining execution feedback wit
 
 ## Status
 
-Phase 3 (preference generation) is the current focus. Phases 0–2 are complete; Phase 3 code is written and ready for execution. See the [Roadmap](#roadmap) below.
+Phases 0–6 are implemented. See the [Roadmap](#roadmap) below.
 
 ## Scope (v1)
 
@@ -49,9 +49,9 @@ Documented up front so the project's resource footprint is explicit, not an afte
 - [x] **Phase 1** — Data curation (syntax validation + complexity + linting)
 - [x] **Phase 2** — Supervised fine-tuning (SFT) — see [below](#phase-2--sft-qlora)
 - [x] **Phase 3** — DPO preference-pair generation (execution feedback + static analysis) — see [below](#phase-3--generation-of-preferences-with-composite-reward-for-dpo)
-- [ ] **Phase 4** — DPO training
-- [ ] **Phase 5** — Evaluation (Base vs. SFT vs. DPO + reward-ablation)
-- [ ] **Phase 6** — Interactive demo (side-by-side model comparison)
+- [x] **Phase 4** — DPO training — see [below](#phase-4--dpo-training)
+- [x] **Phase 5** — Evaluation (Base vs. SFT vs. DPO + reward-ablation) — see [below](#phase-5--evaluation)
+- [x] **Phase 6** — Interactive demo (side-by-side model comparison) — see [below](#phase-6--interactive-demo)
 - [ ] **Phase 7** (stretch, not blocking) — see [below](#phase-7--stretch-extensions)
 
 ## Phase 2 — SFT (QLoRA)
@@ -118,6 +118,75 @@ The Case C percentage is the single most important metric of the project — if 
 - **Orchestrator:** `PreferenceOrchestrator` — wires generation → execution → scoring → labelling. Reuses Phase 1's `linter_check()` and `get_cyclomatic_complexity()` for the static-analysis components of the composite reward.
 - **Report notebook:** `notebooks/03_preference_generation_report.ipynb` — case distribution (bar + pie), composite score histograms (chosen vs. rejected), cyclomatic complexity boxplots, lint error boxplots, per-language breakdown, qualitative samples.
 
+## Phase 4 — DPO Training
+
+The LLM implicitly learns a reward function by maximizing the log-probability of **Chosen** responses and minimizing it for **Rejected** responses. Instead of using RLHF, no separate reward model is needed. No unstable PPO loop. It has much faster and more stable training. DPO transforms alignment into a binary classification problem, leveraging the LLM's own implicit reward structure.
+
+The DPO loss:
+
+$$\mathcal{L}_{\text{DPO}} = -\log\sigma\left(\beta \left[ \log\frac{\pi_\theta(y_w|x)}{\pi_{\text{ref}}(y_w|x)} - \log\frac{\pi_\theta(y_l|x)}{\pi_{\text{ref}}(y_l|x)} \right]\right)$$
+
+Where $y_w$ = chosen, $y_l$ = rejected, $\pi_\theta$ = current policy (being trained), $\pi_{\text{ref}}$ = frozen SFT policy (reference). The key parameter **β = 0.1** controls how far the aligned model is allowed to deviate from the SFT reference — a KL-divergence constraint that prevents the model from collapsing to only memorizing the preference pairs.
+
+- **Trainer:** `trl.DPOTrainer` + QLoRA (4-bit NF4) on the SFT checkpoint (`checkpoints/sft/final_model`), training on Phase 3's clean preference pairs (`data/preferences/dpo_dataset.jsonl`).
+- **Hyperparameters — same golden recipe as SFT.** Identical LoRA configuration (`r=16`, `alpha=32`, `dropout=0.1`) and training config (`lr=2e-4`, `paged_adamw_8bit`, effective batch size 16, `bf16`, gradient checkpointing). The only DPO-specific parameter is `beta=0.1` — the standard value from the [DPO paper](https://arxiv.org/abs/2305.18290). Rationale: the compute budget is better spent on Phase 5's evaluation ablation (composite vs. execution-only reward) than on DPO hyperparameter sweeps.
+- **VRAM budget:** same as SFT — QLoRA (4-bit base ~4.5GB) + gradient checkpointing + `batch_size=2` / `gradient_accumulation=8` keeps this inside 24GB.
+- **Checkpoint:** `checkpoints/dpo/final_model` (adapter + tokenizer).
+- **Report notebook:** `notebooks/04_dpo_training_report.ipynb` — DPO loss curve analysis, three-way comparison (Base vs. SFT vs. DPO on HumanEval pass@1), W&B observations.
+
+## Phase 5 — Evaluation
+
+Comparison of four models: Base, SFT, DPO (composite reward), and DPO (ablation — execution-only reward). Three metric dimensions:
+
+| Dimension | Metric | What it measures |
+|-----------|--------|------------------|
+| **Functional correctness** | HumanEval pass@1 | Does the code work? |
+| **Code simplicity** | Mean cyclomatic complexity | Is the code maintainable? |
+| **Style adherence** | Mean lint errors | Is the code idiomatic? |
+
+### The ablation — the core contribution
+
+The **star graph** of the project: DPO-execution-only vs. DPO-composite-reward, showing in numbers that the composite reward avoids the "spaghetti code" failure mode predicted in Phase 0. This is what transforms the project from "I did SFT+DPO" to "I identified a known failure mode in the literature and demonstrated empirically that my solution works" — the type of contribution an applied research team looks for.
+
+The ablation checkpoint (`checkpoints/dpo_ablation/final_model`) is trained by re-running Phases 3–4 with the composite reward reduced to execution-only:
+
+```python
+# In preference_generation_config.py — ablation run:
+W_EXEC = 1.0
+W_COMPLEXITY = 0.0  # disabled
+W_LINT = 0.0        # disabled
+```
+
+This produces a DPO model trained on binary pass/fail preferences only (no quality ranking for Case C). Comparing it against the full composite model isolates the contribution of the $R_{\text{static}}$ and $R_{\text{style}}$ components.
+
+### Qualitative evidence
+
+5–10 side-by-side samples where both models solve the problem, but the composite model produces measurably simpler code (lower cyclomatic complexity, fewer lint errors). Generated by `src/evaluation/extract_qualitative.py` and rendered inline in the notebook. These let a reviewer judge "by eye" whether the quantitative improvement translates to visibly better code.
+
+### Implementation
+
+- **Evaluation harness:** `scripts/05_run_eval_harness.sh` — runs [`bigcode-evaluation-harness`](https://github.com/bigcode-project/bigcode-evaluation-harness) on all four checkpoints (Base, SFT, DPO composite, DPO ablation), saves generations and pass@1 metrics to `data/evaluation/`.
+- **Static analysis:** `src/evaluation/metrics_analyzer.py` — computes cyclomatic complexity and lint errors on every generated sample using Phase 1's `linter_check()`, writes `data/evaluation/static_analysis_results.jsonl`.
+- **Qualitative extraction:** `src/evaluation/extract_qualitative.py` — finds problems where the ablation model produces more complex code than the composite model, writes side-by-side markdown to `data/evaluation/qualitative_samples.md`.
+- **Report notebook:** `notebooks/05_evaluation_report.ipynb` — the most important notebook of the project. Contains: pass@1 bar chart, static-analysis aggregate table, the ablation boxplots (the star graph), four-way comparison, inline qualitative samples, summary table, and key findings template.
+
+## Phase 6 — Interactive Demo
+
+A Gradio app where a recruiter can paste a coding prompt and see three outputs (Base / SFT / DPO) side by side with their static-analysis metrics in 30 seconds — the return on "impression per effort" is very high compared to reading a README.
+
+**Why Gradio, not FastAPI + frontend?** Gradio already runs its own Uvicorn server internally, provides `gr.Code()` with syntax highlighting, and generates a polished UI with zero HTML/CSS. Adding a separate FastAPI backend + a frontend framework would double the complexity without adding anything a recruiter-facing demo needs. FastAPI and Uvicorn remain in `pyproject.toml` because they're Gradio transitive dependencies and available for Phase 7 if the project evolves into a production service.
+
+- **Three columns, live metrics.** Each column shows the generated code (`gr.Code` with Python highlighting) and two numbers: cyclomatic complexity and lint errors — computed on the fly using Phase 1's `linter_check()`. This makes the composite-reward thesis visible in real time: the DPO column should consistently show lower complexity and fewer lint errors than the Base column.
+- **Preset examples.** Five prompts (palindrome check, LCS, binary search, flatten nested list, thread-safe LRU cache) so the demo works with a single click — no typing needed.
+- **Same QLoRA loading pattern.** All three models load in 4-bit NF4 with the same `BitsAndBytesConfig` used during training. SFT and DPO are loaded as `PeftModel` adapters on the base model. Three instances fit in ~15 GB VRAM total.
+
+### Running
+
+```bash
+uv run python demo/app.py
+# Opens at http://localhost:7860
+```
+
 ## Phase 7 — stretch extensions
 
 None of these block Phases 1–6. Listed here so the scope decisions behind them are explicit rather than assumed.
@@ -140,20 +209,30 @@ codealign/
 ├── main.py
 ├── .env.example
 ├── .gitignore
-├── checkpoints/         # trained adapters (gitignored) — checkpoints/sft/, checkpoints/dpo/
+├── checkpoints/         # trained adapters (gitignored)
+│   ├── sft/             # Phase 2 SFT adapter
+│   ├── dpo/             # Phase 4 DPO adapter (composite reward)
+│   └── dpo_ablation/    # Phase 5 DPO ablation (execution-only reward)
 ├── data/
 │   ├── raw/            # untouched source data
 │   ├── curated/        # syntax + complexity + lint validated SFT data (Phase 1)
 │   │   ├── pristine_dataset.jsonl  # accepted samples (SFT training data)
 │   │   ├── rejected_dataset.jsonl  # filtered-out samples
 │   │   └── report_dataset.jsonl    # all samples with full metadata (notebook)
-│   └── preferences/    # chosen/rejected pairs for DPO (Phase 3)
-│       ├── dpo_dataset.jsonl       # clean pairs for DPOTrainer
-│       └── dpo_report.jsonl        # all results with full metadata (notebook)
+│   ├── preferences/    # chosen/rejected pairs for DPO (Phase 3)
+│   │   ├── dpo_dataset.jsonl       # clean pairs for DPOTrainer
+│   │   └── dpo_report.jsonl        # all results with full metadata (notebook)
+│   └── evaluation/     # Phase 5 results
+│       ├── *_generations.json      # raw code from each model
+│       ├── *_metrics.json          # pass@1 from harness
+│       ├── static_analysis_results.jsonl  # CC + lint per sample
+│       └── qualitative_samples.md  # side-by-side ablation examples
 ├── notebooks/
 │   ├── 01_curation_report.ipynb     # Phase 1 curation report (accepted/rejected, by language, by prompt type)
 │   ├── 02_sft_experiments_log.ipynb # Phase 2 lab journal + evaluation harness runs
-│   └── 03_preference_generation_report.ipynb # Phase 3 case distribution, quality metrics, samples
+│   ├── 03_preference_generation_report.ipynb # Phase 3 case distribution, quality metrics, samples
+│   ├── 04_dpo_training_report.ipynb # Phase 4 DPO loss, Base vs SFT vs DPO comparison
+│   └── 05_evaluation_report.ipynb   # Phase 5 ⭐ ablation, pass@1, CC, lint, qualitative
 ├── src/
 │   ├── __init__.py
 │   ├── data_curation/       # Phase 1
@@ -169,11 +248,18 @@ codealign/
 │   │   ├── docker_sandbox.py                # isolated execution (multi-language)
 │   │   ├── preference_orchestrator.py       # A/B/C labelling + composite reward
 │   │   └── main.py                          # pipeline entry point, W&B tracking
-│   ├── training/             # Phase 2 & 4 — each phase owns its config.py,
-│   │   ├── config.py         # same pattern as data_curation/config.py, not
-│   │   ├── sft_trainer.py    # a shared configs/ folder (see Phase 2 notes)
-│   │   └── dpo_trainer.py
-│   └── evaluation/           # benchmarks, ablation (Phase 5)
+│   ├── training/             # Phase 2 & 4
+│   │   ├── sft_config.py     # SFT hyperparameters, model paths, W&B
+│   │   ├── sft_trainer.py    # SFT training script
+│   │   ├── dpo_config.py     # DPO hyperparameters (β, model paths, W&B)
+│   │   └── dpo_trainer.py    # DPO training script
+│   └── evaluation/           # Phase 5
+│       ├── evaluation_config.py    # paths, model checkpoints, thresholds
+│       ├── metrics_analyzer.py     # CC + lint on all generated code
+│       └── extract_qualitative.py  # side-by-side ablation examples
+├── demo/                # Phase 6 — interactive Gradio app
+│   ├── app.py           # three-column side-by-side comparison UI
+│   └── demo_config.py   # model paths, generation params, server port
 ├── tests/
 ├── scripts/             # thin CLI wrappers per phase, e.g. 01_curate_data.sh
 └── docker/
@@ -189,7 +275,7 @@ uv sync
 cp .env.example .env   # fill in WANDB_API_KEY and HF_TOKEN
 
 # Phase 1 — curate the dataset
-scripts/01_curate_data.sh
+bash scripts/01_curate_data.sh
 
 # Phase 2 — SFT training
 uv run python -m src.training.sft_trainer
@@ -200,8 +286,114 @@ uv run python -m src.preference_generation.main
 
 # Phase 4 — DPO training
 uv run python -m src.training.dpo_trainer
+
+# Phase 5 — evaluation (all 4 checkpoints)
+bash scripts/05_run_eval_harness.sh
+
+# Phase 6 — interactive demo
+uv run python demo/app.py
 ```
 
 ## License
 
 Code in this repository is released under the MIT License (see `LICENSE`). This is independent of the training-data license, which is documented separately above.
+
+
+INCLUIR EN README.md
+## Project Context
+This project was developed as a technical proposal for the [JetBrains AI Internship: Post-Training Coding LLMs with Frontier Alignment Methods](https://internship.jetbrains.com/). It demonstrates a complete post-training pipeline that takes a strong base coding model and aligns it to produce clean, maintainable, working code — not just code that passes tests.
+### The Problem
+Standard alignment approaches for code (RLHF, basic DPO) typically use binary execution feedback: *does the code pass the tests?* This creates a perverse incentive — the model learns to produce complex, hard-to-read "spaghetti code" that technically works but violates software engineering best practices.
+### The Solution
+CodeAlign introduces a **Composite IDE Reward Signal** that combines:
+$$R_{\text{total}} = w_1 R_{\text{exec}} + w_2 R_{\text{static}} + w_3 R_{\text{style}}$$
+| Component | Signal | Purpose |
+|-----------|--------|---------|
+| $R_{\text{exec}}$ | Binary (pytest pass/fail) | Functional correctness |
+| $R_{\text{static}}$ | Cyclomatic complexity (continuous) | Code maintainability |
+| $R_{\text{style}}$ | PEP-8 violations (ruff) | Style adherence |
+This aligns the model's objective with the *human* objective: **clean, maintainable, working code**.
+---
+
+Technical Decisions & Limitations
+Why Python only (v1)?
+Honest constraint: building robust sandboxed execution for multiple languages requires significant infrastructure. Python-only allows us to focus on the alignment methodology rather than the toolchain. Multi-language support is planned for Phase 7.
+
+Why QLoRA?
+Full fine-tuning of a 7B model requires ~56GB VRAM. QLoRA reduces this to ~12GB while maintaining 95%+ of full fine-tuning quality, making the project reproducible on a single consumer GPU.
+
+Why not RLHF?
+Code provides deterministic ground truth (compile/test), making RLHF's human labelling unnecessary and expensive. Execution-based DPO achieves the same goal at a fraction of the cost.
+
+Acknowledgments
+Built as a technical demonstration for the JetBrains AI Internship program. Inspired by:
+
+DeepSeek-V4 Technical Report — On-Policy Distillation & GRM
+TRL Library — SFT/DPO/GRPO trainers
+BigCode Evaluation Harness — HumanEval/MBPP benchmarks
+"Identified a real problem in the literature (reward hacking toward complex code), designed a solution (composite reward), and validated it empirically."
+
+# CodeAlign
+
+## Project Context
+This project was developed as a technical proposal for the [JetBrains AI Internship: Post-Training Coding LLMs with Frontier Alignment Methods](https://internship.jetbrains.com/). It demonstrates a complete post-training pipeline that takes a strong base coding model and aligns it to produce clean, maintainable, working code — not just code that passes tests.
+
+### The Problem
+Standard alignment approaches for code (RLHF, basic DPO) typically use binary execution feedback: *does the code pass the tests?* This creates a perverse incentive — the model learns to produce complex, hard-to-read "spaghetti code" that technically works but violates software engineering best practices.
+
+### The Solution
+CodeAlign introduces a **Composite IDE Reward Signal** that combines:
+
+$$R_{\text{total}} = w_1 R_{\text{exec}} + w_2 R_{\text{static}} + w_3 R_{\text{style}}$$
+
+| Component | Signal | Purpose |
+|-----------|--------|---------|
+| $R_{\text{exec}}$ | Binary (pytest pass/fail) | Functional correctness |
+| $R_{\text{static}}$ | Cyclomatic complexity (continuous) | Code maintainability |
+| $R_{\text{style}}$ | PEP-8 violations (ruff) | Style adherence |
+
+This aligns the model's objective with the *human* objective: **clean, maintainable, working code**.
+
+---
+## Technical Decisions & Limitations
+
+**Why QLoRA?**
+Full fine-tuning of a 7B model requires ~56GB VRAM. QLoRA reduces this to ~12GB while maintaining 95%+ of full fine-tuning quality, making the project reproducible on a single consumer GPU.
+
+**Why not RLHF?**
+Code provides deterministic ground truth (compile/test), making RLHF's human labelling unnecessary and expensive. Execution-based DPO achieves the same goal at a fraction of the cost.
+
+## Acknowledgments
+Built as a technical demonstration for the JetBrains AI Internship program. Inspired by:
+* DeepSeek-V4 Technical Report — On-Policy Distillation & GRM
+* TRL Library — SFT/DPO/GRPO trainers
+* BigCode Evaluation Harness — HumanEval/MBPP benchmarks
+
+*"Identified a real problem in the literature (reward hacking toward complex code), designed a solution (composite reward), and validated it empirically."*
+
+## Overview
+... [Aquí continúa tu Overview original] ...
+B. Actualizar la sección Project structure  Añade el nuevo directorio del modelo fusionado y el script:Plaintext├── checkpoints/         # trained adapters (gitignored)
+│   ├── sft/             # Phase 2 SFT adapter
+│   │   ├── final_model/ # Raw LoRA adapter
+│   │   └── merged_model/# Base + SFT merged (used for DPO)
+...
+├── src/
+│   ├── training/             # Phase 2 & 4
+│   │   ├── sft_config.py
+│   │   ├── sft_trainer.py
+│   │   ├── merge_sft.py      # <-- NUEVO SCRIPT
+C. Actualizar la sección Setup  Añade el paso de ejecución de merge_sft.py:Bash# Phase 1 — curate the dataset
+bash scripts/01_curate_data.sh
+
+# Phase 2 — SFT training
+uv run python -m src.training.sft_trainer
+
+# NEW: Merge SFT adapter into base model before DPO
+uv run python -m src.training.merge_sft
+
+# Phase 3 — generate DPO preference pairs
+docker build -f docker/Dockerfile.executor -t codealign-executor:latest .
+uv run python -m src.preference_generation.main
+
+...

@@ -15,10 +15,15 @@ class PreferenceOrchestrator:
             r_exec = 1.0 if passed else 0.0
             
             metrics = linter_check(code, language)
-            lint_errors = metrics.get("lint_errors") or 0
-            complexity = metrics.get("complexity") or 0
+            lint_errors = metrics.get("lint_errors")
+            complexity = metrics.get("complexity")
             
-            score = (W_EXEC * r_exec) - (W_COMPLEXITY * float(complexity)) - (W_LINT * float(lint_errors))
+            score = (W_EXEC * r_exec)
+            
+            if complexity is not None:
+                score -= (W_COMPLEXITY * float(complexity))
+            if lint_errors is not None:
+                score -= (W_LINT * float(lint_errors))
             
             return {
                 "score": score,

@@ -1,8 +1,8 @@
 from src.data_curation.curation_config import BASE_DIR
 
 # DPO MODELS
-BASE_SFT_MODEL = str(BASE_DIR / "checkpoints" / "sft" / "final_model")
-TOKENIZER_MODEL = BASE_SFT_MODEL 
+BASE_SFT_MODEL = str(BASE_DIR / "checkpoints" / "sft" / "merged_model")
+TOKENIZER_MODEL = BASE_SFT_MODEL
 
 # DPO PATHS
 DPO_DS = str(BASE_DIR / "data" / "preferences" / "dpo_dataset.jsonl")

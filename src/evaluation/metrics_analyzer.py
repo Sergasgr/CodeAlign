@@ -1,42 +1,49 @@
 import json
-from src.evaluation.evaluation_config import (
-    BASE_EVALUATED_MODEL,
-    SFT_EVALUATED_MODEL,
-    DPO_ABLATION_EVALUATED_MODEL,
-    DPO_COMPOSITE_REWARD_EVALUATED_MODEL,
-    RESULTS_EVALUATION
-)
+from pathlib import Path
+
 from src.data_curation.validators import linter_check
+from src.evaluation.evaluation_config import (
+    BASE_GENERATIONS,
+    SFT_GENERATIONS,
+    DPO_COMPOSITE_GENERATIONS,
+    DPO_ABLATION_GENERATIONS,
+    STATIC_ANALYSIS_RESULTS,
+)
 
 MODELS = {
-    "BASE": BASE_EVALUATED_MODEL,
-    "SFT": SFT_EVALUATED_MODEL,
-    "DPO_ABLATION": DPO_ABLATION_EVALUATED_MODEL,
-    "DPO_REWARD": DPO_COMPOSITE_REWARD_EVALUATED_MODEL,
+    "base": BASE_GENERATIONS,
+    "sft": SFT_GENERATIONS,
+    "dpo_composite": DPO_COMPOSITE_GENERATIONS,
+    "dpo_ablation": DPO_ABLATION_GENERATIONS,
 }
 
-def evaluation_result(model: str, problem_id: str, cyclomatic_complexity: float, linter_errors: int):
-    return {
-        "model": model,
-        "problem_id": problem_id,
-        "complexity": cyclomatic_complexity,
-        "linter_errors": linter_errors
-    }
+def analyze_generations(models: dict[str, str], output_path: str) -> None:
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    total = 0
 
-with open(RESULTS_EVALUATION, 'w', encoding='utf-8') as r:
-    for name, path in MODELS.items():
-        try:
-            with open(path, 'r', encoding='utf-8') as f: 
-                generations = json.load(f)
-                for problem_idx, samples in enumerate(generations):
-                    for sample_idx, code_str in enumerate(samples):
-                        result = linter_check(code_str, "python") #deberia haber soporte multilenguaje hay que cambiar
-                        unique_id = f"{name}_prob{problem_idx}_samp{sample_idx}"
-                        r.write(json.dumps(evaluation_result(
-                            name, unique_id, result["complexity"], result["lint_errors"]
-                        )) + "\n")
-        except FileNotFoundError:
-            print(f"Warning: Generations file not found for {name} in {path}")
+    with open(output_path, "w", encoding="utf-8") as out:
+        for model_name, gen_path in models.items():
+            try:
+                with open(gen_path, "r", encoding="utf-8") as f:
+                    generations = json.load(f)
+            except FileNotFoundError:
+                print(f"Skipping {model_name}: {gen_path} not found")
+                continue
 
-print(f"Static metrics calculated and saved in {RESULTS_EVALUATION}")   
+            for problem_idx, samples in enumerate(generations):
+                for sample_idx, code_str in enumerate(samples):
+                    result = linter_check(code_str, "python")
+                    record = {
+                        "model": model_name,
+                        "problem_idx": problem_idx,
+                        "sample_idx": sample_idx,
+                        "complexity": result.get("complexity"),
+                        "lint_errors": result.get("lint_errors"),
+                    }
+                    out.write(json.dumps(record) + "\n")
+                    total += 1
 
+    print(f"{total} samples analyzed → {output_path}")
+
+if __name__ == "__main__":
+    analyze_generations(MODELS, STATIC_ANALYSIS_RESULTS)

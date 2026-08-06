@@ -6,6 +6,9 @@ class UnsupportedLanguage(Exception):
     pass
 
 def code_command(code: str, language: str, timeout_seconds: int = EXECUTION_TIMEOUT): 
+    def run_via_sh(script: str) -> list[str]:
+        return ["timeout", str(timeout_seconds), "sh", "-c", script, "sh", code]
+    
     match language: # AMPLIACIÓN FASE 7 JUNTO CON LINTERS (docker con toolchains)
         case "python":
             return ["timeout", str(timeout_seconds), "python", "-c", code]
@@ -14,18 +17,18 @@ def code_command(code: str, language: str, timeout_seconds: int = EXECUTION_TIME
         case "typescript" | "ts":
             return ["timeout", str(timeout_seconds), "ts-node", "-e", code]
         case "java":
-            return ["sh", "-c", f"echo '{code}' > Main.java && javac Main.java && timeout {timeout_seconds} java Main"]
+            return run_via_sh(r'printf "%s\n" "$1" > Main.java && javac Main.java && java Main')
         case "cpp" | "c++":
-            return ["sh", "-c", f"echo '{code}' > main.cpp && g++ main.cpp -o main && timeout {timeout_seconds} ./main"]
+            return run_via_sh(r'printf "%s\n" "$1" > main.cpp && g++ main.cpp -o main && ./main')
         case "c_sharp":
-            return ["sh", "-c", f"echo '{code}' > Program.cs && dotnet script Program.cs"]
+            return run_via_sh(r'printf "%s\n" "$1" > Program.cs && dotnet script Program.cs')
         case "go":
-            return ["sh", "-c", f"echo '{code}' > main.go && timeout {timeout_seconds} go run main.go"]
+            return run_via_sh(r'printf "%s\n" "$1" > main.go && go run main.go')
         case "rust" | "rs":
-            return ["sh", "-c", f"echo '{code}' > main.rs && rustc main.rs && timeout {timeout_seconds} ./main"]
+            return run_via_sh(r'printf "%s\n" "$1" > main.rs && rustc main.rs && ./main')
         case _:
             raise UnsupportedLanguage(f"Unsupported language: {language}")
-            
+               
 class DockerSandbox:
     def __init__(self, image_name: str = SANDBOX_IMAGE_NAME):
         self.client = docker.from_env()

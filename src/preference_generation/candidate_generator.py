@@ -33,7 +33,13 @@ class CandidateGenerator():
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
     def generate_candidates(self, prompt: str, n_candidates: int = N_CANDIDATES) -> list[str]:
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        chat_prompt = self.tokenizer.apply_chat_template(
+            {"role": "user", "content": prompt},
+            tokenize=False,
+            add_generation_prompt=True 
+        )
+        
+        inputs = self.tokenizer(chat_prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
         outputs = self.model.generate( # type: ignore
             **inputs,
             do_sample=True,      

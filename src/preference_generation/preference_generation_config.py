@@ -1,6 +1,6 @@
 # PREFERENCE GENERATOR MODELS
-SFT_MODEL = "checkpoints/sft/final_model"
-TOKENIZER_MODEL_PREFERENCE_GENERATOR = "Qwen/Qwen2.5-Coder-7B-Instruct"
+SFT_MODEL = "checkpoints/sft/merged_model"
+TOKENIZER_MODEL_PREFERENCE_GENERATOR = SFT_MODEL
 
 # PREFERENCE GENERATION - DPO DATASET PATH
 DPO_DS = "data/preferences/dpo_dataset.jsonl"
