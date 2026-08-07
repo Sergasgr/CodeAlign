@@ -352,3 +352,5 @@ Built as a technical demonstration for the JetBrains Post-Training and Alignment
 ## License
 
 Code in this repository is released under the MIT License (see `LICENSE`). This is independent of the training-data license, which is documented separately above.
+
+Python $\rightarrow$ PyCharmJava $\rightarrow$ IntelliJ IDEAC / C++ $\rightarrow$ CLionC# $\rightarrow$ RiderJavaScript / TypeScript $\rightarrow$ WebStormGo $\rightarrow$ GoLandRust $\rightarrow$ RustRover

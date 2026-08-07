@@ -2,10 +2,10 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 from src.data_curation.curation_config import BASE_DIR
-from src.training.sft_config import SFT_MODEL as BASE_MODEL_ID # "Qwen/Qwen2.5-Coder-7B-Instruct"
-from src.training.dpo_config import BASE_SFT_MODEL as SFT_ADAPTER_DIR
+from src.training.sft_config import SFT_MODEL as BASE_MODEL_ID
 
 def merge_and_save():
+    SFT_ADAPTER_DIR = str(BASE_DIR / "checkpoints" / "sft" / "final_model")
     MERGED_OUTPUT_DIR = str(BASE_DIR / "checkpoints" / "sft" / "merged_model")
 
     print(f"1. Loading base model ({BASE_MODEL_ID}) in bfloat16...")

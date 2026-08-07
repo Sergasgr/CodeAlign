@@ -17,7 +17,7 @@ from src.data_curation.curation_config import (
     MAX_COMPLEXITY,
     MAX_LINT_ERRORS,
 )
-from src.data_curation.linters import ruff_check, cpplint_check, get_cyclomatic_complexity#, eslint_check, pmd_check, clippy_check, golangci_lint_check
+from src.data_curation.linters import ruff_check, cpplint_check, get_cyclomatic_complexity, eslint_check, pmd_check, clippy_check, golangci_lint_check, tsc_check, csharp_check
 
 LANGUAGES = {  
     "python": Language(tspython.language()),
@@ -27,8 +27,8 @@ LANGUAGES = {
     "c_sharp": Language(tscsharp.language()),
     "javascript": Language(tsjavascript.language()),
     "typescript": Language(tstypescript.language_typescript()),
-    #"go": Language(tsgo.language()),
-    #"rust": Language(tsrust.language()),
+    "go": Language(tsgo.language()),
+    "rust": Language(tsrust.language()),
 }
 
 PARSERS = {lang_name: Parser(lang_obj) for lang_name, lang_obj in LANGUAGES.items()}
@@ -49,26 +49,26 @@ def validate_syntax(code: str, language: str) -> tuple[bool, str]:
         return False, "Syntax error detected by tree-sitter"
     return True, ""
 
-# FASE 7 con Docker Image: retomar esta implementación
 def linter_check(code: str, language: str): # SEMANTICAL VALIDITY
     match language:
         case "python":
             lint_errors = ruff_check(code)
         case "c++" | "cpp" | "c":
             lint_errors = cpplint_check(code)
-        #case "javascript" | "js": 
-            #lint_errors = eslint_check(code)
-        #case "java":
-            #lint_errors = pmd_check(code)
-        #case "c_sharp"
-        #case "typescript"
-        #case "rust" | "rs":
-            #lint_errors = clippy_check(code)
-        #case "go":
-            #lint_errors = golangci_lint_check(code)
-        
-        case _:
-            lint_errors = None 
+        case "javascript" | "js": 
+            lint_errors = eslint_check(code)
+        case "typescript" | "ts":
+            lint_errors = tsc_check(code)
+        case "java":
+            lint_errors = pmd_check(code)
+        case "c_sharp" | "csharp" | "cs":
+            lint_errors = csharp_check(code)
+        case "rust" | "rs":
+            lint_errors = clippy_check(code)
+        case "go":
+            lint_errors = golangci_lint_check(code)
+        case _: 
+            lint_errors = None
     return {
         "lint_errors": lint_errors,
         "complexity": get_cyclomatic_complexity(code, language)
@@ -99,8 +99,7 @@ def check_code(code: str, language: str):
         result["is_valid_syntax"] = False
         return result
 
-    # lint_errors, cycl_complexity = linter_check(code, language).values() # Linters: Semantical validity check
-    metrics = linter_check(code, language)
+    metrics = linter_check(code, language) # Linters: Semantical validity check
     lint_errors = metrics["lint_errors"]
     cycl_complexity = metrics["complexity"]
 

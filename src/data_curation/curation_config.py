@@ -1,7 +1,7 @@
 from pathlib import Path
 
 # DATA CURATION PATHS
-BASE_DIR = Path(__file__).resolve().parents[2] # codealign/data -> curated/ preferences/ raw/ 
+BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 CURATED_DIR = DATA_DIR / "curated"
 DS_PATH = CURATED_DIR / "pristine_dataset.jsonl"
@@ -17,6 +17,8 @@ LANGUAGE_CONFIGS = {
     "c_sharp": "c#",
     "javascript": "javascript",
     "typescript": "typescript",
+    "go": "go",
+    "rust": "rust"
 }
 
 # ALLOWED LICENSES

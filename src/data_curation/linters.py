@@ -1,4 +1,5 @@
 import tempfile 
+import os
 import subprocess
 import lizard
 
@@ -38,7 +39,6 @@ def cpplint_check(code: str) -> int:
         if "Artifact" not in line and "Total errors found" not in line and line.strip()
     ])
 
-"""
 def eslint_check(code: str) -> int:
     with tempfile.NamedTemporaryFile(suffix=".js", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
@@ -90,7 +90,38 @@ def golangci_lint_check(code: str) -> int: #considerar si golangci-lint o revive
     if not out:
         return 0
     return len(out.split('\n'))
-"""
+
+def tsc_check(code: str) -> int:
+    with tempfile.NamedTemporaryFile(suffix=".ts", delete=True) as tmp:
+        tmp.write(code.encode('utf-8'))
+        tmp.flush()
+        result = subprocess.run(
+            ["tsc", "--noEmit", tmp.name],
+            capture_output=True, text=True, check=False
+        )
+    out = result.stdout.strip()
+    if not out:
+        return 0
+    return len([line for line in out.split('\n') if "error TS" in line])
+
+def csharp_check(code: str) -> int:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        subprocess.run(
+            ["dotnet", "new", "console", "-n", "TempProj"],
+            cwd=tmpdir, capture_output=True, check=False
+        )
+        proj_dir = os.path.join(tmpdir, "TempProj")
+        program_path = os.path.join(proj_dir, "Program.cs")
+        with open(program_path, "w", encoding="utf-8") as f:
+            f.write(code)
+        result = subprocess.run(
+            ["dotnet", "build", "--nologo", "-clp:NoSummary"],
+            cwd=proj_dir, capture_output=True, text=True, check=False
+        )
+    out = result.stdout.strip()
+    if not out:
+        return 0
+    return len([line for line in out.split('\n') if " warning CS" in line or " error CS" in line])
 
 def get_cyclomatic_complexity(code: str, language: str) -> int:
     ext = LIZARD_EXTENSION.get(language, ".txt")
