@@ -1,8 +1,9 @@
+import argparse
 import json
 import os
 from pathlib import Path
-
 import wandb
+
 from dotenv import load_dotenv
 from tqdm import tqdm
 
@@ -11,6 +12,9 @@ from src.preference_generation.preference_generation_config import (
     DPO_DS,
     DPO_REPORT,
     WANDB_RUN_NAME,
+    W_EXEC,
+    W_COMPLEXITY,
+    W_LINT
 )
 from src.preference_generation.preference_orchestrator import PreferenceOrchestrator
 
@@ -25,13 +29,39 @@ def main():
         wandb.login(key=wandb_api_key)
     else:
         raise ValueError("WANDB_API_KEY not found as environment variable")
+    
+    parser = argparse.ArgumentParser(description="Generate DPO Preferences")
+    parser.add_argument(
+        "--reward_mode", 
+        type=str, 
+        choices=["composite", "execution_only"], 
+        default="composite",
+        help="Define los pesos del reward para generar el dataset."
+    )
+    args = parser.parse_args()
+    
+    if args.reward_mode == "execution_only":
+        w_exec, w_comp, w_lint = 1.0, 0.0, 0.0
+        dpo_output_path = DPO_DS.replace(".jsonl", "_exec_only.jsonl")
+        report_output_path = DPO_REPORT.replace(".jsonl", "_exec_only.jsonl")
+        run_name = f"{WANDB_RUN_NAME}-exec-only"
+        tags = ["preference-generation", "sandbox", "execution-only"]
+    else:
+        w_exec, w_comp, w_lint = W_EXEC, W_COMPLEXITY, W_LINT
+        dpo_output_path = DPO_DS
+        report_output_path = DPO_REPORT
+        run_name = f"{WANDB_RUN_NAME}-composite"
+        tags = ["preference-generation", "sandbox", "composite-reward"]
 
     wandb.init(
         project=wandb_project,
         entity=wandb_entity,
-        name=WANDB_RUN_NAME,
-        tags=["preference-generation", "sandbox", "composite-reward"],
+        name=run_name,
+        tags=tags,
     )
+    
+    print(f"Initializing orchestrator in mode: {args.reward_mode}")
+    print(f"Weights -> Exec: {w_exec}, Comp: {w_comp}, Lint: {w_lint}")
 
     all_data = []
     with open(DS_PATH, "r", encoding="utf-8") as ds:
@@ -41,7 +71,11 @@ def main():
     print(f"Loaded {len(all_data)} prompts from {DS_PATH}")
 
     print("Initializing SFT model and Docker sandbox...")
-    orchestrator = PreferenceOrchestrator()
+    orchestrator = PreferenceOrchestrator(
+        w_exec=w_exec, 
+        w_complexity=w_comp, 
+        w_lint=w_lint
+    )
 
     stats = {
         "total_prompts": len(all_data),

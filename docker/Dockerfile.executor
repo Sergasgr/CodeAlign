@@ -8,6 +8,7 @@ ENV RUSTUP_HOME=/usr/local/rustup
 ENV PATH="/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:${GOPATH}/bin:${CARGO_HOME}/bin"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
     git \
     build-essential \
@@ -18,24 +19,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     golang-go \
     dotnet-sdk-8.0 \
     && python3 -m venv /opt/venv \
-    && pip install --no-cache-dir ruff cpplint \
-    && curl -fsSL https://nodesource.com/setup_20.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
+    && /opt/venv/bin/pip install --no-cache-dir ruff cpplint uv \
+    && apt-get install -y --no-install-recommends nodejs npm \
     && npm install -g eslint typescript ts-node \
     && curl -sSL https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.0.0/pmd-dist-7.0.0-bin.zip -o /tmp/pmd.zip \
     && apt-get install -y --no-install-recommends unzip \
     && unzip /tmp/pmd.zip -d /opt/ \
     && ln -s /opt/pmd-bin-7.0.0/bin/pmd /usr/local/bin/pmd \
-    && curl --proto '=https' --tlsv1.2 -sSf https://rustup.rs | sh -s -- -y --default-toolchain stable \
+    && curl --proto '=https' --tlsv1.2 -sSfL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
     && chmod -R 755 ${CARGO_HOME} ${RUSTUP_HOME} \
-    && rustup component add clippy \
-    && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin \
+    && /usr/local/cargo/bin/rustup component add clippy \
+    && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v1.59.1 \
     && apt-get purge -y unzip \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN useradd -m -s /bin/bash sandboxuser
+RUN chown -R sandboxuser:sandboxuser /opt/venv
 
 WORKDIR /app
 RUN chown -R sandboxuser:sandboxuser /app

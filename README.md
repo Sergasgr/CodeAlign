@@ -178,14 +178,21 @@ The **star graph** of the project: DPO-execution-only vs. DPO-composite-reward, 
 
 The ablation checkpoint (`checkpoints/dpo_ablation/final_model`) is trained by re-running Phases 3–4 with the composite reward reduced to execution-only:
 
-```python
-# In preference_generation_config.py — ablation run:
-W_EXEC = 1.0
-W_COMPLEXITY = 0.0  # disabled
-W_LINT = 0.0        # disabled
-```
+1. Edit `src/preference_generation/preference_generation_config.py` to disable the quality metrics:
+   ```python
+   W_EXEC = 1.0
+   W_COMPLEXITY = 0.0  # disabled
+   W_LINT = 0.0        # disabled
+   ```
+2. Re-run Phase 3 to generate binary-only preference pairs: `uv run python -m src.preference_generation.main`
+3. Edit `src/training/dpo_config.py` to change the output directory:
+   ```python
+   OUTPUT_DIR = Path("checkpoints/dpo_ablation")
+   WANDB_PROJECT = "codealign-dpo-ablation"
+   ```
+4. Re-run Phase 4 to train the ablation model: `uv run python -m src.training.dpo_trainer`
 
-This produces a DPO model trained on binary pass/fail preferences only (no quality ranking for Case C). Comparing it against the full composite model isolates the contribution of the $R_{\text{static}}$ and $R_{\text{style}}$ components.
+This produces a DPO model trained on binary pass/fail preferences only (no quality ranking for Case C). Comparing it against the full composite model isolates the contribution of the $R_{\text{static}}$ and $R_{\text{style}}$ components. Both runs are fully tracked in **Weights & Biases (wandb)**, allowing side-by-side comparison of training loss, learning rate schedules, and generation entropy between the composite and ablation models.
 
 ### Qualitative evidence
 
@@ -215,14 +222,14 @@ uv run python demo/app.py
 # Opens at http://localhost:7860
 ```
 
-## Phase 7 — stretch extensions
+## Phase 7 — stretch extensions (Next Steps)
 
-None of these block Phases 1–6. Listed here so the scope decisions behind them are explicit rather than assumed.
+None of these block Phases 1–6. Listed here so the scope decisions behind them are explicit rather than assumed. These address key risks and limitations of the current pipeline:
 
-- **Rust execution daemon.** Formalize the sandboxed code-executor (used for DPO preference generation, Phase 3) as an async service in Rust (`tokio`, gRPC/REST API), running in an isolated container. Legitimate systems-engineering scope beyond Python — safe execution of untrusted code is a genuine problem, not busywork.
-- **Lightweight RL comparison.** A `GRPOTrainer` run (TRL) using the same composite reward built for DPO, compared against the DPO result. Covers the "reinforcement learning" item from the original internship posting that DPO alone doesn't, at a fraction of the risk of the CUDA-kernel route considered earlier in this project's planning.
-- **Hardware/inference-level demonstration.** If there's still an appetite to show low-level GPU understanding: export the DPO model to GGUF and benchmark latency/throughput across quantization levels with `llama.cpp`, or profile the training run itself with `torch.profiler`/Nsight to show where GPU time actually goes. Both demonstrate real hardware literacy without the risk of a hand-rolled kernel that's hard to defend line-by-line in an interview.
-- **Docker image with native linter toolchains — and Go/Rust as full languages, not just tokenizer support.** `eslint` (Node), a PMD-equivalent (JDK), `clippy` (rustup), and `golangci-lint` (Go) aren't pip-installable — that's exactly why they were dropped from Phase 1's v1 scope rather than left half-working. A dedicated Docker image bundling those toolchains removes that constraint, and is the natural point to also bring Go and Rust in as fully-supported languages (tree-sitter grammars for both are already installed and imported in `validators.py`) rather than partial citizens with parsing but no lint signal. Go and Rust each have their own JetBrains IDE (GoLand, RustRover) — extending language scope here keeps the "languages mirror JetBrains' IDE lineup" reasoning from Phase 0 consistent through to 8 languages instead of 6, if this phase is reached.
+- **Lightweight RL comparison (GRPO vs DPO).** A `GRPOTrainer` run (via TRL) using the same composite reward built for DPO, compared against the DPO result. For a complete research portfolio, comparing direct differentiation methods (DPO/ORPO) against online reinforcement learning (PPO/GRPO) is the standard. This covers the "reinforcement learning" requirement from the original JetBrains internship posting.
+- **Multi-Language Evaluation (MultiPL-E).** Currently, `bigcode-evaluation-harness` is configured for Python (HumanEval). To prove the generalizability of our composite reward, evaluation must be extended to Rust and Go using MultiPL-E. The training dataset and sandbox already support these languages, but the final benchmarking step is currently Python-centric.
+- **Rust execution daemon (gRPC / Tonic).** Formalize the sandboxed code-executor (used for DPO preference generation, Phase 3) as a robust, high-performance async service in Rust. Moving from simple subprocess calls to a formal **gRPC architecture using `tonic`** is the industry standard for scalable, language-agnostic service-oriented execution.
+- **Docker image with native linter toolchains.** Extending the executor Docker image to include `clippy` (rustup) and `golangci-lint` (Go), establishing Rust and Go as fully-supported languages in the composite reward pipeline (currently gated only by tree-sitter syntax and cyclomatic complexity).
 
 Not listed here because it's already addressed elsewhere: Unsloth (TRL's SFT/DPO speed-up) is an optional dependency group for Phases 2/4, not a Phase 7 item — see [Compute budget](#compute-budget) and `pyproject.toml`.
 
@@ -296,7 +303,8 @@ codealign/
 │       ├── 02_sft_experiments_log.ipynb
 │       ├── 03_preference_generation_report.ipynb
 │       ├── 04_dpo_training_report.ipynb
-│       └── 05_evaluation_report.ipynb   # ⭐ the most important notebook
+│       ├── 05_evaluation_report.ipynb   # ⭐ the most important notebook
+│       └── 06_grpo_rl_report.ipynb      # Phase 7 (GRPO vs DPO & Multi-language)
 ├── demo/                    # Phase 6 — interactive Gradio app
 │   ├── app.py               # three-column side-by-side comparison UI
 │   └── demo_config.py       # model paths, generation params, server port
@@ -316,29 +324,79 @@ codealign/
 git clone <repo-url>
 cd codealign
 uv sync
-cp .env.example .env   # fill in WANDB_API_KEY and HF_TOKEN
+cp .env.example .env # fill in WANDB_API_KEY and HF_TOKEN
+
+# --- PRE-REQUISITE: Build the Sandbox Environment ---
+# We build the Docker image first because it contains all the native toolchains
+# (PMD, ESLint, Go, Rust, .NET, etc.) needed for both Phase 1 and Phase 3.
+docker build -f docker/Dockerfile.executor -t codealign-executor:latest .
 
 # Phase 1 — curate the dataset
-bash scripts/01_curate_data.sh
+docker run --rm \
+  -u "$(id -u):$(id -g)" \
+  -e HOME=/tmp \
+  -e DOTNET_NOLOGO=1 \
+  -e DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+  -v "$(pwd):/app" \
+  -w /app \
+  -e UV_CACHE_DIR=/tmp \
+  codealign-executor:latest \
+  /opt/venv/bin/uv run python -m src.data_curation.main
+
+# Consideración Adicional: Persistencia de Caché
+
+#Si el problema de velocidad persiste, podrías considerar montar un volumen para la caché de NuGet en el host:
+#bash
+
+#docker run --rm \
+ # -u "$(id -u):$(id -g)" \
+  #-e HOME=/tmp \
+  #-v "$(pwd):/app" \
+  #-v "/tmp/dotnet_cache:/home/sandboxuser/.nuget" \
+  #-w /app \
+  #...
+
 
 # Phase 2 — SFT training
 uv run python -m src.training.sft_trainer
+uv run python -m src.training.merge_sft # Merge SFT adapter into base model (required before DPO)
 
-# Phase 2.5 — merge SFT adapter into base model (required before DPO)
-uv run python -m src.training.merge_sft
-
-# Phase 3 — generate DPO preference pairs
-docker build -f docker/Dockerfile.executor -t codealign-executor:latest .
-uv run python -m src.preference_generation.main
-
-# Phase 4 — DPO training
-uv run python -m src.training.dpo_trainer
+# Phase 3 & 4 — Generate preferences and train DPO (Composite & Ablation)
+# This script handles both the execution-only baseline and our composite reward model
+bash scripts/03_04_run_dpo_pipeline.sh
 
 # Phase 5 — evaluation (all 4 checkpoints)
 bash scripts/05_run_eval_harness.sh
 
 # Phase 6 — interactive demo
 uv run python demo/app.py
+```
+
+## Advanced: High-Performance Rust Executor Daemon (Phase 7)
+
+By default, Phase 3 (Preference Generation) uses Python's subprocess to orchestrate the Docker containers. For a production-grade environment, this project includes a gRPC Rust Daemon using tonic and tokio for asynchronous, high-throughput sandbox execution.
+
+To run the pipeline using the Rust daemon instead of Python subprocesses:
+
+### 1. Install system prerequisites (Protocol Buffers compiler):
+```bash
+sudo apt update
+sudo apt install protobuf-compiler
+# Verify installation: protoc --version
+```
+
+### 2. Start the gRPC Server:
+```bash
+cd rust-daemon
+cargo clean
+cargo run
+# The server will listen on [::1]:3000
+```
+
+### 3. Run Preference Generation via gRPC:
+Open a new terminal window and run Phase 3, pointing it to the Rust daemon:
+```bash
+uv run python -m src.preference_generation.main --reward_mode composite --executor grpc
 ```
 
 ## Acknowledgments
@@ -352,5 +410,3 @@ Built as a technical demonstration for the JetBrains Post-Training and Alignment
 ## License
 
 Code in this repository is released under the MIT License (see `LICENSE`). This is independent of the training-data license, which is documented separately above.
-
-Python $\rightarrow$ PyCharmJava $\rightarrow$ IntelliJ IDEAC / C++ $\rightarrow$ CLionC# $\rightarrow$ RiderJavaScript / TypeScript $\rightarrow$ WebStormGo $\rightarrow$ GoLandRust $\rightarrow$ RustRover

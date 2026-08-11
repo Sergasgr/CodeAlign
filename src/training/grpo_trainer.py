@@ -2,6 +2,7 @@ import os
 import json
 import torch
 import wandb
+from typing import Any
 from dotenv import load_dotenv
 from datasets import Dataset
 from peft import LoraConfig
@@ -33,10 +34,21 @@ from src.training.grpo_config import ( # Asumiendo que guardaste el config como 
 load_dotenv()
 orchestrator = PreferenceOrchestrator()
 
+"""
 def composite_reward_func(prompts: list[str], completions: list[str], language: list[str], **kwargs) -> list[float]:
     scores = []
     for prompt, completion, lang in zip(prompts, completions, language): 
         code = completion[0]["content"] if isinstance(completion, list) else completion 1 # Argument of type "Literal['content']" cannot be assigned to parameter "key" of type "SupportsIndex | slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]" in function "__getitem__"
+        eval_result = orchestrator.reward_score(code, lang)
+        scores.append(float(eval_result["score"]))
+    return scores
+"""
+
+def composite_reward_func(prompts: list[str], completions: list[Any], **kwargs) -> list[float]:
+    language = kwargs.get("language", [])
+    scores = []
+    for prompt, completion, lang in zip(prompts, completions, language): 
+        code = completion[0]["content"] if isinstance(completion, list) else completion 
         eval_result = orchestrator.reward_score(code, lang)
         scores.append(float(eval_result["score"]))
     return scores
@@ -110,7 +122,7 @@ def main():
         gradient_checkpointing=True,            
         optim="paged_adamw_8bit",
         beta=BETA, 
-        dataset_num_proc=4, # No parameter named "dataset_num_proc"PylancereportCallIssue
+        dataloader_num_workers=4, #dataset_num_proc=4, No parameter named "dataset_num_proc"PylancereportCallIssue
         use_vllm=False, 
         seed=SEED,
     )

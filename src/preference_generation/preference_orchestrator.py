@@ -4,9 +4,12 @@ from src.data_curation.validators import linter_check
 from src.preference_generation.preference_generation_config import W_EXEC, W_COMPLEXITY, W_LINT
 
 class PreferenceOrchestrator:
-    def __init__(self):
+    def __init__(self, w_exec=W_EXEC, w_complexity=W_COMPLEXITY, w_lint=W_LINT):
         self.candidate_generator = CandidateGenerator()
         self.sandbox = DockerSandbox()
+        self.w_exec = w_exec
+        self.w_complexity = w_complexity
+        self.w_lint = w_lint
 
     def reward_score(self, code: str, language: str) -> dict:
         try: 
@@ -18,12 +21,12 @@ class PreferenceOrchestrator:
             lint_errors = metrics.get("lint_errors")
             complexity = metrics.get("complexity")
             
-            score = (W_EXEC * r_exec)
+            score = (self.w_exec * r_exec)
             
             if complexity is not None:
-                score -= (W_COMPLEXITY * float(complexity))
+                score -= (self.w_complexity * float(complexity))
             if lint_errors is not None:
-                score -= (W_LINT * float(lint_errors))
+                score -= (self.w_lint * float(lint_errors))
             
             return {
                 "score": score,

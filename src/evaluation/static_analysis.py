@@ -1,3 +1,4 @@
+import argparse
 import json
 from pathlib import Path
 
@@ -10,14 +11,15 @@ from src.evaluation.evaluation_config import (
     STATIC_ANALYSIS_RESULTS,
 )
 
-MODELS = {
-    "base": BASE_GENERATIONS,
-    "sft": SFT_GENERATIONS,
-    "dpo_composite": DPO_COMPOSITE_GENERATIONS,
-    "dpo_ablation": DPO_ABLATION_GENERATIONS,
-}
+def get_models_dict(lang: str) -> dict[str, str]:
+    return {
+        "base": BASE_GENERATIONS.format(lang=lang),
+        "sft": SFT_GENERATIONS.format(lang=lang),
+        "dpo_composite": DPO_COMPOSITE_GENERATIONS.format(lang=lang),
+        "dpo_ablation": DPO_ABLATION_GENERATIONS.format(lang=lang),
+    }
 
-def analyze_generations(models: dict[str, str], output_path: str) -> None:
+def analyze_generations(models: dict[str, str], output_path: str, lang: str) -> None:
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     total = 0
 
@@ -32,7 +34,7 @@ def analyze_generations(models: dict[str, str], output_path: str) -> None:
 
             for problem_idx, samples in enumerate(generations):
                 for sample_idx, code_str in enumerate(samples):
-                    result = linter_check(code_str, "python")
+                    result = linter_check(code_str, lang)
                     record = {
                         "model": model_name,
                         "problem_idx": problem_idx,
@@ -43,7 +45,19 @@ def analyze_generations(models: dict[str, str], output_path: str) -> None:
                     out.write(json.dumps(record) + "\n")
                     total += 1
 
-    print(f"{total} samples analyzed → {output_path}")
+    print(f"{total} samples analyzed for {lang} → {output_path}")
 
 if __name__ == "__main__":
-    analyze_generations(MODELS, STATIC_ANALYSIS_RESULTS)
+    parser = argparse.ArgumentParser(description="Run static analysis on evaluation generations.")
+    parser.add_argument(
+        "--language", 
+        type=str, 
+        required=True, 
+        help="Language of the evaluated generations (e.g., python, rust, go)"
+    )
+    args = parser.parse_args()
+
+    models = get_models_dict(args.language)
+    output_path = STATIC_ANALYSIS_RESULTS.format(lang=args.language)
+    
+    analyze_generations(models, output_path, args.language)

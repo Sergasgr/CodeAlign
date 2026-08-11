@@ -50,7 +50,7 @@ def validate_syntax(code: str, language: str) -> tuple[bool, str]:
     return True, ""
 
 def linter_check(code: str, language: str): # SEMANTICAL VALIDITY
-    match language:
+    match language.lower():
         case "python":
             lint_errors = ruff_check(code)
         case "c++" | "cpp" | "c":
@@ -61,7 +61,7 @@ def linter_check(code: str, language: str): # SEMANTICAL VALIDITY
             lint_errors = tsc_check(code)
         case "java":
             lint_errors = pmd_check(code)
-        case "c_sharp" | "csharp" | "cs":
+        case "c_sharp" | "csharp" | "cs" | "c#":
             lint_errors = csharp_check(code)
         case "rust" | "rs":
             lint_errors = clippy_check(code)
@@ -75,7 +75,7 @@ def linter_check(code: str, language: str): # SEMANTICAL VALIDITY
     }
 
 def rejection(status: str, error: str) -> dict:
-    return {
+    return {   
         "is_valid_syntax": None,
         "lint_errors": None,
         "cyclomatic_complexity": None,
@@ -109,8 +109,10 @@ def check_code(code: str, language: str):
         "cyclomatic_complexity": cycl_complexity        
     }
     
-    if lint_errors is not None and lint_errors > MAX_LINT_ERRORS:
-       result = rejection("rejected_lint", f"Too many lint violations: {lint_errors}")
+    if lint_errors == -1:
+        result = rejection("rejected_lint_timeout", "Linter timed out (infra, no señal de calidad de código)")
+    elif lint_errors is not None and lint_errors > MAX_LINT_ERRORS: 
+        result = rejection("rejected_lint", f"Too many lint violations: {lint_errors}")
     elif cycl_complexity > MAX_COMPLEXITY:
         result = rejection("rejected_complexity", f"Cyclomatic complexity too high: {cycl_complexity}")
     else:

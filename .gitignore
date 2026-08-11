@@ -35,3 +35,6 @@ rust-daemon/target/
 
 # OS
 .DS_Store
+
+/tmp*
+*.rlib

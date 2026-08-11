@@ -2,10 +2,6 @@
 # Prerequisites:
 #   git clone https://github.com/bigcode-project/bigcode-evaluation-harness.git tools/bigcode-evaluation-harness
 #   cd tools/bigcode-evaluation-harness && pip install -e .
-#
-# The ablation model (checkpoints/dpo_ablation/final_model) must be trained
-# separately with W_COMPLEXITY=0, W_LINT=0 in preference_generation_config.py
-# (see Phase 5 ablation instructions in README).
 
 set -euo pipefail
 mkdir -p data/evaluation

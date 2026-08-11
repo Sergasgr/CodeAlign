@@ -1,6 +1,7 @@
 import os
 import torch
 import wandb 
+import argparse
 from dotenv import load_dotenv
 from datasets import load_dataset
 from peft import LoraConfig
@@ -38,10 +39,29 @@ def main():
         wandb.login(key=wandb_api_key)
     else:
         raise ValueError("WANDB_API_KEY not found as environment variable")
-
+    
+    parser = argparse.ArgumentParser(description="DPO Trainer for CodeAlign")
+    parser.add_argument(
+        "--reward_mode", 
+        type=str, 
+        choices=["composite", "execution_only"], 
+        default="composite",
+        help="Choose which preference dataset to use for the ablation study."
+    )
+    args = parser.parse_args()
+    
+    if args.reward_mode == "execution_only":
+        dataset_path = DPO_DS.replace(".jsonl", "_exec_only.jsonl") 
+        run_name = f"{WANDB_RUN_NAME}-ablation-exec-only"
+        tags = ["dpo", "preference-dataset", "execution-only", "qwen2.5-coder"]
+    else:
+        dataset_path = DPO_DS
+        run_name = f"{WANDB_RUN_NAME}-composite"
+        tags = ["dpo", "preference-dataset", "composite-reward", "qwen2.5-coder"]
+        
     dataset = load_dataset(
         "json",
-        data_files=DPO_DS, 
+        data_files=dataset_path, 
         split="train"
     ) 
 
@@ -74,8 +94,10 @@ def main():
         task_type="CAUSAL_LM"
     )
 
+    output_directory = str(DPO_OUTPUT_DIR) if args.reward_mode == "composite" else f"{DPO_OUTPUT_DIR}_exec_only"
+
     training_args = DPOConfig( 
-        output_dir=str(DPO_OUTPUT_DIR), 
+        output_dir=output_directory, 
         save_strategy="steps",
         save_steps=SAVE_STEPS,
         save_total_limit=SAVE_TOTAL_LIMIT,
@@ -97,8 +119,8 @@ def main():
     wandb.init(
         project=wandb_project,
         entity=wandb_entity,
-        name=WANDB_RUN_NAME,
-        tags=["dpo", "preference-dataset", "composite-reward", "qwen2.5-coder"]
+        name=run_name,
+        tags=tags
     )
 
     trainer = DPOTrainer(
@@ -111,7 +133,7 @@ def main():
 
     trainer.train()
 
-    final_dir = f"{DPO_OUTPUT_DIR}/final_model"
+    final_dir = f"{output_directory}/final_model"
     trainer.save_model(final_dir)
     tokenizer.save_pretrained(final_dir)
 

@@ -9,11 +9,11 @@ REJECTED_PATH = CURATED_DIR / "rejected_dataset.jsonl"
 REPORT_PATH = CURATED_DIR / "report_dataset.jsonl"
 
 # CommitPackFT
-DS_NAME = "bigcode/commitpackft" #"ise-uiuc/Magicoder-OSS-Instruct-75K"
+DS_NAME = "bigcode/commitpackft" 
 LANGUAGE_CONFIGS = {
     "python": "python",
     "java": "java",
-    "cpp": "c++",
+    "cpp": "c++", # ES c++? si el config_name de LANGUAGE_CONFIGS["cpp"] = "c++" no coincide exactamente con el nombre de config real en bigcode/commitpackft
     "c_sharp": "c#",
     "javascript": "javascript",
     "typescript": "typescript",
@@ -41,3 +41,12 @@ DUPLICATION_WINDOW = 12
 DUPLICATION_DENSITY_THRESHOLD = 0.2
 
 NEW_FILE_LINE_THRESHOLD = 3
+
+PMD_TIMEOUT_SECONDS = 30
+CLIPPY_TIMEOUT_SECONDS = 30
+RUFF_TIMEOUT_SECONDS = 30
+CPPLINT_TIMEOUT_SECONDS = 30
+ESLINT_TIMEOUT_SECONDS = 30
+GOLANG_TIMEOUT_SECONDS = 30
+TSC_TIMEOUT_SECONDS = 30
+DOTNET_TIMEOUT_SECONDS = 120

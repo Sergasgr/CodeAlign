@@ -7,18 +7,18 @@ DPO_ABLATION_CHECKPOINT = str(BASE_DIR / "checkpoints" / "dpo_ablation" / "final
 
 EVAL_DIR = BASE_DIR / "data" / "evaluation"
 
-BASE_GENERATIONS = str(EVAL_DIR / "base_generations.json")
-SFT_GENERATIONS = str(EVAL_DIR / "sft_generations.json")
-DPO_COMPOSITE_GENERATIONS = str(EVAL_DIR / "dpo_composite_generations.json")
-DPO_ABLATION_GENERATIONS = str(EVAL_DIR / "dpo_ablation_generations.json")
+BASE_GENERATIONS = str(EVAL_DIR / "base_generations_{lang}.json")
+SFT_GENERATIONS = str(EVAL_DIR / "sft_generations_{lang}.json")
+DPO_COMPOSITE_GENERATIONS = str(EVAL_DIR / "dpo_composite_generations_{lang}.json")
+DPO_ABLATION_GENERATIONS = str(EVAL_DIR / "dpo_ablation_generations_{lang}.json")
 
-BASE_METRICS = str(EVAL_DIR / "base_metrics.json")
-SFT_METRICS = str(EVAL_DIR / "sft_metrics.json")
-DPO_COMPOSITE_METRICS = str(EVAL_DIR / "dpo_composite_metrics.json")
-DPO_ABLATION_METRICS = str(EVAL_DIR / "dpo_ablation_metrics.json")
+BASE_METRICS = str(EVAL_DIR / "base_metrics_{lang}.json")
+SFT_METRICS = str(EVAL_DIR / "sft_metrics_{lang}.json")
+DPO_COMPOSITE_METRICS = str(EVAL_DIR / "dpo_composite_metrics_{lang}.json")
+DPO_ABLATION_METRICS = str(EVAL_DIR / "dpo_ablation_metrics_{lang}.json")
 
-STATIC_ANALYSIS_RESULTS = str(EVAL_DIR / "static_analysis_results.jsonl")
+STATIC_ANALYSIS_RESULTS = str(EVAL_DIR / "static_analysis_results_{lang}.jsonl")
 
-QUALITATIVE_SAMPLES_MD = str(EVAL_DIR / "qualitative_samples.md")
+QUALITATIVE_SAMPLES_MD = str(EVAL_DIR / "qualitative_samples_{lang}.md")
 TARGET_SAMPLES = 10
 COMPLEXITY_GAP = 2  # minimum CC difference to qualify as interesting

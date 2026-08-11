@@ -1,0 +1,18 @@
+syntax = "proto3"; 
+
+package codealign;
+
+message ExecutionRequest {
+  string language = 1;
+  string code = 2;
+}
+
+message ExecutionResponse {
+  bool success = 1;
+  string stdout = 2;
+  string stderr = 3;
+}
+
+service ExecutorService {
+  rpc ExecuteCode (ExecutionRequest) returns (ExecutionResponse);
+}
