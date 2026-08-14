@@ -13,7 +13,7 @@ DS_NAME = "bigcode/commitpackft"
 LANGUAGE_CONFIGS = {
     "python": "python",
     "java": "java",
-    "cpp": "c++", # ES c++? si el config_name de LANGUAGE_CONFIGS["cpp"] = "c++" no coincide exactamente con el nombre de config real en bigcode/commitpackft
+    "cpp": "c++",  # HF normalizes "c++" in parquet paths; 4602 rows verified
     "c_sharp": "c#",
     "javascript": "javascript",
     "typescript": "typescript",

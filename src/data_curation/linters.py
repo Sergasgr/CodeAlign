@@ -41,7 +41,7 @@ def cpplint_check(code: str) -> int:
         tmp.flush()
         try:
             result = subprocess.run(
-                ["cpplint", "--countdown", tmp.name], 
+                ["cpplint", "--counting=detailed", tmp.name], 
                 capture_output=True, 
                 text=True, 
                 check=False,
@@ -55,12 +55,13 @@ def cpplint_check(code: str) -> int:
     ])
 
 def eslint_check(code: str) -> int:
+    rules_json = '{"no-undef": "error", "no-unused-vars": "warn", "no-redeclare": "error", "no-dupe-keys": "error", "no-unreachable": "error", "no-constant-condition": "error", "no-empty": "warn", "valid-typeof": "error"}'
     with tempfile.NamedTemporaryFile(suffix=".js", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
         tmp.flush()
         try:
             result = subprocess.run(
-                ["eslint", "--no-eslintrc", "--format", "compact", tmp.name],
+                ["eslint", "--no-eslintrc", "--rule", rules_json, "--format", "compact", tmp.name],
                 capture_output=True, 
                 text=True, 
                 check=False,
@@ -79,7 +80,7 @@ def pmd_check(code: str) -> int: #considerar si pmd o checkstyle
         tmp.flush()
         try:
             result = subprocess.run(
-                ["pmd", "check", "-f", "text", "-R", "category/java/errorprone.xml", "-d", tmp.name],
+                ["pmd", "check", "-f", "text", "-R", "category/java/errorprone.xml,category/java/bestpractices.xml", "-d", tmp.name],
                 capture_output=True, text=True, check=False, timeout=PMD_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
@@ -143,18 +144,15 @@ def tsc_check(code: str) -> int:
 def get_csharp_project() -> str:
     if not hasattr(csharp_local, "proj_dir"):
         tmpdir = tempfile.mkdtemp(prefix="codealign_csharp_")
-        try:
-            subprocess.run(
-                ["dotnet", "new", "console", "-n", "TempProj"],
-                cwd=tmpdir, 
-                capture_output=True, 
-                check=False,
-                timeout=DOTNET_TIMEOUT_SECONDS
-            )
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("C# Project initialization timed out. Network issue or dead lock.")
-        
-    return os.path.join(tmpdir, "TempProj")
+        subprocess.run(
+            ["dotnet", "new", "console", "-n", "TempProj"],
+            cwd=tmpdir,
+            capture_output=True,
+            check=False,
+            timeout=DOTNET_TIMEOUT_SECONDS,
+        )
+        csharp_local.proj_dir = os.path.join(tmpdir, "TempProj")
+    return csharp_local.proj_dir
 
 def csharp_check(code: str) -> int:
     proj_dir = get_csharp_project()
