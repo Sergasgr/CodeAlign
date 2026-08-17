@@ -144,14 +144,18 @@ def tsc_check(code: str) -> int:
 def get_csharp_project() -> str:
     if not hasattr(csharp_local, "proj_dir"):
         tmpdir = tempfile.mkdtemp(prefix="codealign_csharp_")
-        subprocess.run(
-            ["dotnet", "new", "console", "-n", "TempProj"],
-            cwd=tmpdir,
-            capture_output=True,
-            check=False,
-            timeout=DOTNET_TIMEOUT_SECONDS,
-        )
+        try:
+            subprocess.run(
+                ["dotnet", "new", "console", "-n", "TempProj"],
+                cwd=tmpdir, 
+                capture_output=True, 
+                check=False,
+                timeout=DOTNET_TIMEOUT_SECONDS
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("C# Project initialization timed out. Network issue or dead lock.")
         csharp_local.proj_dir = os.path.join(tmpdir, "TempProj")
+
     return csharp_local.proj_dir
 
 def csharp_check(code: str) -> int:
