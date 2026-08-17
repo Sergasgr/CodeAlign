@@ -176,21 +176,20 @@ Comparison of four models: Base, SFT, DPO (composite reward), and DPO (ablation 
 
 The **star graph** of the project: DPO-execution-only vs. DPO-composite-reward, showing in numbers that the composite reward avoids the "spaghetti code" failure mode predicted in Phase 0. This is what transforms the project from "I did SFT+DPO" to "I identified a known failure mode in the literature and demonstrated empirically that my solution works" — the type of contribution an applied research team looks for.
 
-The ablation checkpoint (`checkpoints/dpo_ablation/final_model`) is trained by re-running Phases 3–4 with the composite reward reduced to execution-only:
+The ablation checkpoint (`checkpoints/dpo_ablation/final_model`) is trained by re-running Phases 3–4 with the composite reward reduced to execution-only. Both the preference generator and the DPO trainer accept a `--reward_mode` CLI flag that handles this automatically — no manual config editing required:
 
-1. Edit `src/preference_generation/preference_generation_config.py` to disable the quality metrics:
-   ```python
-   W_EXEC = 1.0
-   W_COMPLEXITY = 0.0  # disabled
-   W_LINT = 0.0        # disabled
-   ```
-2. Re-run Phase 3 to generate binary-only preference pairs: `uv run python -m src.preference_generation.main`
-3. Edit `src/training/dpo_config.py` to change the output directory:
-   ```python
-   OUTPUT_DIR = Path("checkpoints/dpo_ablation")
-   WANDB_PROJECT = "codealign-dpo-ablation"
-   ```
-4. Re-run Phase 4 to train the ablation model: `uv run python -m src.training.dpo_trainer`
+```bash
+# Generate execution-only preference pairs (W_COMPLEXITY=0, W_LINT=0)
+uv run python -m src.preference_generation.main --reward_mode execution_only
+
+# Train the ablation DPO model on those pairs
+uv run python -m src.training.dpo_trainer --reward_mode execution_only
+```
+
+Or run the full pipeline (both composite and ablation) in one shot:
+```bash
+bash scripts/03_04_run_dpo_pipeline.sh
+```
 
 This produces a DPO model trained on binary pass/fail preferences only (no quality ranking for Case C). Comparing it against the full composite model isolates the contribution of the $R_{\text{static}}$ and $R_{\text{style}}$ components. Both runs are fully tracked in **Weights & Biases (wandb)**, allowing side-by-side comparison of training loss, learning rate schedules, and generation entropy between the composite and ablation models.
 
@@ -201,7 +200,7 @@ This produces a DPO model trained on binary pass/fail preferences only (no quali
 ### Implementation
 
 - **Evaluation harness:** `scripts/05_run_eval_harness.sh` — runs [`bigcode-evaluation-harness`](https://github.com/bigcode-project/bigcode-evaluation-harness) on all four checkpoints (Base, SFT, DPO composite, DPO ablation), saves generations and pass@1 metrics to `data/evaluation/`.
-- **Static analysis:** `src/evaluation/metrics_analyzer.py` — computes cyclomatic complexity and lint errors on every generated sample using Phase 1's `linter_check()`, writes `data/evaluation/static_analysis_results.jsonl`.
+- **Static analysis:** `src/evaluation/static_analysis.py` — computes cyclomatic complexity and lint errors on every generated sample using Phase 1's `linter_check()`, writes `data/evaluation/static_analysis_results.jsonl`.
 - **Qualitative extraction:** `src/evaluation/extract_qualitative.py` — finds problems where the ablation model produces more complex code than the composite model, writes side-by-side markdown to `data/evaluation/qualitative_samples.md`.
 - **Report notebook:** `src/notebooks/05_evaluation_report.ipynb` — the most important notebook of the project. Contains: pass@1 bar chart, static-analysis aggregate table, the ablation boxplots (the star graph), four-way comparison, inline qualitative samples, summary table, and key findings template.
 
@@ -296,7 +295,7 @@ codealign/
 │   │   └── dpo_trainer.py       # DPO training script
 │   ├── evaluation/              # Phase 5
 │   │   ├── evaluation_config.py     # paths, model checkpoints, thresholds
-│   │   ├── metrics_analyzer.py      # CC + lint on all generated code
+│   │   ├── static_analysis.py      # CC + lint on all generated code
 │   │   └── extract_qualitative.py   # side-by-side ablation examples
 │   └── notebooks/               # per-phase Jupyter reports
 │       ├── 01_curation_report.ipynb
@@ -310,7 +309,10 @@ codealign/
 │   └── demo_config.py       # model paths, generation params, server port
 ├── scripts/                 # thin CLI wrappers per phase
 │   ├── 01_curate_data.sh
+│   ├── 02_run_sft.sh
+│   ├── 03_04_run_dpo_pipeline.sh
 │   └── 05_run_eval_harness.sh
+├── tests/                   # unit tests
 ├── docker/
 │   └── Dockerfile.executor  # Phase 3 sandbox image (python:3.11-slim, non-root)
 └── rust-daemon/             # Phase 7 (stretch) — Rust execution daemon
@@ -331,7 +333,7 @@ cp .env.example .env # fill in WANDB_API_KEY and HF_TOKEN
 # (PMD, ESLint, Go, Rust, .NET, etc.) needed for both Phase 1 and Phase 3.
 docker build -f docker/Dockerfile.executor -t codealign-executor:latest .
 
-# Phase 1 — curate the dataset
+# Phase 1 — curate the dataset (runs inside Docker for native linter toolchains)
 docker run --rm \
   -u "$(id -u):$(id -g)" \
   -e HOME=/tmp \
@@ -343,23 +345,8 @@ docker run --rm \
   codealign-executor:latest \
   /opt/venv/bin/uv run python -m src.data_curation.main
 
-# Consideración Adicional: Persistencia de Caché
-
-#Si el problema de velocidad persiste, podrías considerar montar un volumen para la caché de NuGet en el host:
-#bash
-
-#docker run --rm \
- # -u "$(id -u):$(id -g)" \
-  #-e HOME=/tmp \
-  #-v "$(pwd):/app" \
-  #-v "/tmp/dotnet_cache:/home/sandboxuser/.nuget" \
-  #-w /app \
-  #...
-
-
-# Phase 2 — SFT training
-uv run python -m src.training.sft_trainer
-uv run python -m src.training.merge_sft # Merge SFT adapter into base model (required before DPO)
+# Phase 2 — SFT training + adapter merge
+bash scripts/02_run_sft.sh
 
 # Phase 3 & 4 — Generate preferences and train DPO (Composite & Ablation)
 # This script handles both the execution-only baseline and our composite reward model

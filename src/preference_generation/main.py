@@ -133,6 +133,18 @@ def main():
             score_accum["chosen_lint"] += float(result.get("chosen_lint_errors", 0) or 0)
             score_accum["rejected_lint"] += float(result.get("rejected_lint_errors", 0) or 0)
 
+            if stats["pairs_generated"] % 500 == 0:
+                n_so_far = max(stats["pairs_generated"], 1)
+                wandb.log({
+                    "pairs_generated": stats["pairs_generated"],
+                    "pairs_discarded": stats["pairs_discarded"],
+                    "case_a": stats["case_a"],
+                    "case_b": stats["case_b"],
+                    "case_c": stats["case_c"],
+                    "avg_chosen_score": round(score_accum["chosen_score"] / n_so_far, 4),
+                    "avg_rejected_score": round(score_accum["rejected_score"] / n_so_far, 4),
+                })
+
     n = max(stats["pairs_generated"], 1)
     avg_stats = {
         "avg_chosen_score": round(score_accum["chosen_score"] / n, 4),

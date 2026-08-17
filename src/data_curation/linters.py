@@ -153,8 +153,9 @@ def get_csharp_project() -> str:
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError("C# Project initialization timed out. Network issue or dead lock.")
+        csharp_local.proj_dir = os.path.join(tmpdir, "TempProj")
         
-    return os.path.join(tmpdir, "TempProj")
+    return csharp_local.proj_dir
 
 def csharp_check(code: str) -> int:
     proj_dir = get_csharp_project()
