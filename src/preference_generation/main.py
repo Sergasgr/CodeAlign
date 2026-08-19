@@ -97,8 +97,8 @@ def main():
 
     Path(DPO_DS).parent.mkdir(parents=True, exist_ok=True)
 
-    with open(DPO_DS, "w", encoding="utf-8") as dpo_f, \
-         open(DPO_REPORT, "w", encoding="utf-8") as report_f:
+    with open(dpo_output_path, "w", encoding="utf-8") as dpo_f, \
+         open(report_output_path, "w", encoding="utf-8") as report_f:
 
         for data in tqdm(all_data, desc="Generating DPO pairs"):
             prompt = data["messages"][0]["content"]

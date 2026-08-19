@@ -32,7 +32,6 @@ from src.training.grpo_config import ( # Asumiendo que guardaste el config como 
 )
 
 load_dotenv()
-orchestrator = PreferenceOrchestrator()
 
 """
 def composite_reward_func(prompts: list[str], completions: list[str], language: list[str], **kwargs) -> list[float]:
@@ -116,13 +115,13 @@ def main():
         gradient_accumulation_steps=GRAD_ACCUMULATION_STEPS,          
         bf16=True,                             
         learning_rate=LEARNING_RATE,                  
-        max_length=MAX_SEQ_LENGTH, # No parameter named "max_length"PylancereportCallIssue                  
+        max_completion_length=MAX_SEQ_LENGTH,            
         logging_steps=10,                     
         report_to="wandb",                     
         gradient_checkpointing=True,            
         optim="paged_adamw_8bit",
         beta=BETA, 
-        dataloader_num_workers=4, #dataset_num_proc=4, No parameter named "dataset_num_proc"PylancereportCallIssue
+        dataloader_num_workers=4, #dataset_num_proc=4, No parameter named "dataset_num_proc" PylancereportCallIssue
         use_vllm=False, 
         seed=SEED,
     )
@@ -151,4 +150,5 @@ def main():
     wandb.finish()
     
 if __name__ == "__main__":
+    orchestrator = PreferenceOrchestrator()
     main()

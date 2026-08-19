@@ -7,6 +7,7 @@ from datasets import load_dataset
 from peft import LoraConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import DPOConfig, DPOTrainer # type: ignore
+from src.data_curation.curation_config import BASE_DIR
 
 from src.training.dpo_config import (
     BASE_SFT_MODEL,
@@ -94,7 +95,7 @@ def main():
         task_type="CAUSAL_LM"
     )
 
-    output_directory = str(DPO_OUTPUT_DIR) if args.reward_mode == "composite" else f"{DPO_OUTPUT_DIR}_exec_only"
+    output_directory = str(DPO_OUTPUT_DIR) if args.reward_mode == "composite" else str(BASE_DIR / "checkpoints" / "dpo_ablation")
 
     training_args = DPOConfig( 
         output_dir=output_directory, 

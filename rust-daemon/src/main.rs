@@ -6,12 +6,16 @@ sudo apt install protobuf-compiler
 Incluir en ejecucion junto con scripts??
 cargo clean
 cargo run
+
+
+Acción A (Timeout doble): En rust-daemon/src/main.rs (aprox. líneas 45-46), el timeout externo (tokio) y el interno (bash) son ambos de 5 segundos. Cambia el timeout de tokio a 15 segundos para darle margen a Docker: let limit = Duration::from_secs(15);
+Acción B (dotnet script): En el mismo archivo (línea 144), intentas usar dotnet script pero no está instalado en la imagen de Docker. Añade la instalación al Dockerfile.executor: RUN dotnet tool install -g dotnet-script (y asegúrate de que el PATH incluya las tools globales de dotnet).
 */
 
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::{Request, Response, Status, transport::Server};
 
 pub mod codealign {
     tonic::include_proto!("codealign"); //`OUT_DIR` not set, build scripts may have failed to runrust-analyzermacro-error
@@ -32,7 +36,7 @@ codealign.rs(146, 5): this bound might be missing in the impl
 */
 
 impl ExecutorService for MyExecutor {
-    async fn execute_code( 
+    async fn execute_code(
         &self,
         request: Request<ExecutionRequest>,
     ) -> Result<Response<ExecutionResponse>, Status> {
@@ -43,14 +47,15 @@ impl ExecutorService for MyExecutor {
         println!("Executing code in: {}", language);
 
         let limit = Duration::from_secs(5);
-        
+
         let args = match build_command(&language, &code) {
             Ok(args) => args,
             Err(e) => return Err(Status::invalid_argument(e)),
         };
 
         let mut command = Command::new("docker");
-        command.arg("run")
+        command
+            .arg("run")
             .arg("--rm")
             .arg("--network=none")
             .arg("--memory=128m")
@@ -61,12 +66,21 @@ impl ExecutorService for MyExecutor {
 
         let output_result = match output_timeout {
             Ok(res) => res,
-            Err(_) => return Err(Status::deadline_exceeded("Error: The code took too long to execute")),
+            Err(_) => {
+                return Err(Status::deadline_exceeded(
+                    "Error: The code took too long to execute",
+                ));
+            }
         };
 
         let output = match output_result {
             Ok(out) => out,
-            Err(err) => return Err(Status::internal(format!("Critical error invoking Docker CLI: {}", err))),
+            Err(err) => {
+                return Err(Status::internal(format!(
+                    "Critical error invoking Docker CLI: {}",
+                    err
+                )));
+            }
         };
 
         let success = output.status.success();
@@ -85,7 +99,7 @@ impl ExecutorService for MyExecutor {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:3000".parse()?; 
+    let addr = "[::1]:3000".parse()?;
     let executor = MyExecutor::default();
 
     println!("gRPC Server listening on {}", addr);
@@ -98,56 +112,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn build_command(language: &str, code: &str) -> Result<Vec<String>, String> { 
+fn build_command(language: &str, code: &str) -> Result<Vec<String>, String> {
     let timeout_val = "5";
     let run_via_sh = |script: &str| -> Vec<String> {
         vec![
-            "timeout".to_string(), 
+            "timeout".to_string(),
             timeout_val.to_string(),
-            "sh".to_string(), 
-            "-c".to_string(), 
+            "sh".to_string(),
+            "-c".to_string(),
             script.to_string(),
-            "sh".to_string(), 
-            code.to_string()
+            "sh".to_string(),
+            code.to_string(),
         ]
     };
 
     match language.to_lowercase().as_str() {
         "python" => Ok(vec![
-            "timeout".to_string(), 
-            timeout_val.to_string(), 
-            "python".to_string(), 
-            "-c".to_string(), 
-            code.to_string()
+            "timeout".to_string(),
+            timeout_val.to_string(),
+            "python".to_string(),
+            "-c".to_string(),
+            code.to_string(),
         ]),
         "javascript" | "js" => Ok(vec![
-            "timeout".to_string(), 
-            timeout_val.to_string(), 
-            "node".to_string(), 
-            "-e".to_string(), 
-            code.to_string()
+            "timeout".to_string(),
+            timeout_val.to_string(),
+            "node".to_string(),
+            "-e".to_string(),
+            code.to_string(),
         ]),
         "typescript" | "ts" => Ok(vec![
-            "timeout".to_string(), 
-            timeout_val.to_string(), 
-            "ts-node".to_string(), 
-            "-e".to_string(), 
-            code.to_string()
+            "timeout".to_string(),
+            timeout_val.to_string(),
+            "ts-node".to_string(),
+            "-e".to_string(),
+            code.to_string(),
         ]),
         "java" => Ok(run_via_sh(
-            "printf \"%s\\n\" \"$1\" > Main.java && javac Main.java && java Main"
+            "printf \"%s\\n\" \"$1\" > Main.java && javac Main.java && java Main",
         )),
         "cpp" | "c++" => Ok(run_via_sh(
-            "printf \"%s\\n\" \"$1\" > main.cpp && g++ main.cpp -o main && ./main"
+            "printf \"%s\\n\" \"$1\" > main.cpp && g++ main.cpp -o main && ./main",
         )),
         "c_sharp" => Ok(run_via_sh(
-            "printf \"%s\\n\" \"$1\" > Program.cs && dotnet script Program.cs"
+            "printf \"%s\\n\" \"$1\" > Program.cs && dotnet script Program.cs",
         )),
         "go" => Ok(run_via_sh(
-            "printf \"%s\\n\" \"$1\" > main.go && go run main.go"
+            "printf \"%s\\n\" \"$1\" > main.go && go run main.go",
         )),
         "rust" | "rs" => Ok(run_via_sh(
-            "printf \"%s\\n\" \"$1\" > main.rs && rustc main.rs && ./main"
+            "printf \"%s\\n\" \"$1\" > main.rs && rustc main.rs && ./main",
         )),
         _ => Err(format!("Unsupported language: {}", language)),
     }

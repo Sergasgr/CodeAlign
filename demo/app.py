@@ -44,17 +44,30 @@ base_model = AutoModelForCausalLM.from_pretrained(
 print("Loading SFT adapter...")
 sft_model = PeftModel.from_pretrained(
     AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL, quantization_config=bnb_config,
-        device_map="auto", use_cache=True,
+        BASE_MODEL, 
+        quantization_config=bnb_config,
+        device_map="auto", 
+        use_cache=True,
+        adapter_name="sft"
     ),
     SFT_CHECKPOINT,
+)
+
+#print??
+merged_sft_model = AutoModelForCausalLM.from_pretrained(
+    MERGED_SFT_MODEL,
+    quantization_config=bnb_config,
+    device_map="auto"
 )
 
 print("Loading DPO adapter...")
 dpo_model = PeftModel.from_pretrained(
     AutoModelForCausalLM.from_pretrained(
-        MERGED_SFT_MODEL, quantization_config=bnb_config,
-        device_map="auto", use_cache=True,
+        MERGED_SFT_MODEL, 
+        quantization_config=bnb_config,
+        device_map="auto",
+        use_cache=True,
+        adapter_name="dpo"
     ),
     DPO_CHECKPOINT,
 )

@@ -1,5 +1,5 @@
-   0.096907921s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint error for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: false }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
-   0.097707096s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/sergas/codealign/rust-daemon/target/debug/.fingerprint/rust-daemon-348445a9547d09e7/bin-rust-daemon`
+   0.063534093s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint error for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: false }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
+   0.063660415s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/sergas/codealign/rust-daemon/target/debug/.fingerprint/rust-daemon-348445a9547d09e7/bin-rust-daemon`
 
 Caused by:
     No such file or directory (os error 2)
@@ -43,10 +43,10 @@ Stack backtrace:
   25: __libc_start_main_impl
              at ./csu/../csu/libc-start.c:360:3
   26: <unknown>
-   0.205935080s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint dirty for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/home/sergas/codealign/rust-daemon/build.rs", Edition2024) }
-   0.205947241s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint:     dirty: PrecalculatedComponentsChanged { old: "1786463342.056195821s (target/flycheck0/stderr)", new: "1786984729.366655523s (target/flycheck0/stderr)" }
-   0.256525328s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint error for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: true }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
-   0.256544489s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/sergas/codealign/rust-daemon/target/debug/.fingerprint/rust-daemon-cc95b297885582cc/test-bin-rust-daemon`
+   0.119094015s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint dirty for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/home/sergas/codealign/rust-daemon/build.rs", Edition2024) }
+   0.119105736s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint:     dirty: PrecalculatedComponentsChanged { old: "1787154378.256342111s (target/flycheck0/stderr)", new: "1787154381.339386429s (target/flycheck0/stderr)" }
+   0.124452766s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint error for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: true }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
+   0.124470847s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/sergas/codealign/rust-daemon/target/debug/.fingerprint/rust-daemon-cc95b297885582cc/test-bin-rust-daemon`
 
 Caused by:
     No such file or directory (os error 2)
@@ -91,6 +91,6 @@ Stack backtrace:
              at ./csu/../csu/libc-start.c:360:3
   26: <unknown>
    Compiling rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)
-error: could not compile `rust-daemon` (bin "rust-daemon") due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
 error: could not compile `rust-daemon` (bin "rust-daemon" test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `rust-daemon` (bin "rust-daemon") due to 1 previous error

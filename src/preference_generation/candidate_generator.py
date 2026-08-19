@@ -34,11 +34,11 @@ class CandidateGenerator():
 
     def generate_candidates(self, prompt: str, n_candidates: int = N_CANDIDATES) -> list[str]:
         chat_prompt = self.tokenizer.apply_chat_template(
-            {"role": "user", "content": prompt},
+            [{"role": "user", "content": prompt}],
             tokenize=False,
             add_generation_prompt=True 
         )
-        
+                
         inputs = self.tokenizer(chat_prompt, return_tensors="pt", add_special_tokens=False).to(self.model.device)
         outputs = self.model.generate( # type: ignore
             **inputs,

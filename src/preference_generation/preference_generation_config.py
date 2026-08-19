@@ -1,9 +1,12 @@
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parents[2]
+
 # PREFERENCE GENERATOR MODELS
-SFT_MODEL = "checkpoints/sft/merged_model"
+SFT_MODEL = str(BASE_DIR / "checkpoints/sft/merged_model")
 TOKENIZER_MODEL_PREFERENCE_GENERATOR = SFT_MODEL
 
 # PREFERENCE GENERATION - DPO DATASET PATH
-DPO_DS = "data/preferences/dpo_dataset.jsonl"
+DPO_DS = str(BASE_DIR / "data/preferences/dpo_dataset.jsonl")
 
 # PREFERENCE GENERATION HYPERPARAMETERS
 N_CANDIDATES = 2 
