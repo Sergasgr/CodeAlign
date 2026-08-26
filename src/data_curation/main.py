@@ -56,6 +56,7 @@ def main():
     counts: dict[str, int] = {}
     prompt_type_counts: dict[str, int] = {}
     processed_lang_counts: dict[str, int] = {}
+    rejection_by_lang: dict[str, dict[str, int]] = {}
     
     max_workers = os.cpu_count()
     print(f"\nStarting parallel generation with {max_workers} threads...\n", flush=True)
@@ -92,9 +93,11 @@ def main():
                     prompt_type_counts[prompt_type] = prompt_type_counts.get(prompt_type, 0) + 1
                     f.write(json.dumps(chat_ml, ensure_ascii=False) + "\n")
                 else:
+                    lang_rej = rejection_by_lang.setdefault(language, {})
+                    lang_rej[status] = lang_rej.get(status, 0) + 1
                     rj.write(json.dumps(chat_ml, ensure_ascii=False) + "\n")
                 
-                if i % 1000 == 0: # Ahora que lo lanzo en paralelo y va más ráido quizás podría considerar subir de 1000
+                if i % 1000 == 0:
                     accepted_so_far = counts.get("accepted", 0)
                     progress_pct = (i / len(ds)) * 100
                     acceptance_rate = (accepted_so_far / i * 100) if i > 0 else 0
@@ -127,7 +130,18 @@ def main():
     print("\nAccepted samples by language:")
     for lang, n in sorted(language_count.items(), key=lambda kv: -kv[1]):
         print(f"{LANGUAGE_LOGS[lang]}: {n}")
-    print(f"Full report: {REPORT_PATH}")
+    
+    # Per-language rejection breakdown (essential for tuning linter configs)
+    print("\nRejection breakdown by language:")
+    for lang_key in sorted(rejection_by_lang.keys()):
+        lang_rej = rejection_by_lang[lang_key]
+        total_lang = total_lang_counts.get(lang_key, 0)
+        accepted_lang = language_count.get(lang_key, 0)
+        rate = (accepted_lang / total_lang * 100) if total_lang > 0 else 0
+        parts = [f"{reason}={count}" for reason, count in sorted(lang_rej.items(), key=lambda kv: -kv[1])]
+        print(f"  {LANGUAGE_LOGS.get(lang_key, lang_key)} ({rate:.1f}% accepted): {', '.join(parts)}")
+    
+    print(f"\nFull report: {REPORT_PATH}")
                   
 if __name__ == "__main__":
     main()

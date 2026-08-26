@@ -27,8 +27,21 @@ ALLOWED_LICENSES = {
     "isc", "unlicense", "cc0-1.0",
 }
 
-# DATA CURATION PARAMETERS 
-MAX_LINT_ERRORS = 3
+# DATA CURATION PARAMETERS
+# Per-language lint thresholds — each tool has different granularity.
+# ESLint/PMD are coarse-grained (focused semantic rules), cpplint/dotnet
+# are noisier for standalone snippets. See diagnostic analysis for rationale.
+MAX_LINT_ERRORS: dict[str, int] = {
+    "python": 3,       # ruff (F,E9 only — real bugs, not style)
+    "java": 3,         # PMD (errorprone + bestpractices — focused)
+    "cpp": 5,          # cpplint (filtered, but still verbose for snippets)
+    "c_sharp": 5,      # dotnet build (warnings only — compilation errors excluded)
+    "javascript": 3,   # eslint (8 narrow semantic rules)
+    "typescript": 3,   # eslint-based (same semantic rules as JS)
+    "go": 4,           # golangci-lint (govet + errcheck + staticcheck)
+    "rust": 4,         # clippy (warnings only — compilation errors excluded)
+}
+MAX_LINT_ERRORS_DEFAULT = 3
 MAX_COMPLEXITY = 10
 THRESHOLD = 0.85
 

@@ -16,6 +16,7 @@ from src.data_curation.curation_config import (
     DUPLICATION_WINDOW,
     MAX_COMPLEXITY,
     MAX_LINT_ERRORS,
+    MAX_LINT_ERRORS_DEFAULT,
 )
 from src.data_curation.linters import ruff_check, cpplint_check, get_cyclomatic_complexity, eslint_check, pmd_check, clippy_check, golangci_lint_check, tsc_check, csharp_check
 
@@ -110,8 +111,8 @@ def check_code(code: str, language: str):
     }
     
     if lint_errors == -1:
-        result = rejection("rejected_lint_timeout", "Linter timed out (infra, no señal de calidad de código)")
-    elif lint_errors is not None and lint_errors > MAX_LINT_ERRORS: 
+        result = rejection("rejected_lint_timeout", "Linter timed out (infra, not a code quality signal)")
+    elif lint_errors is not None and lint_errors > MAX_LINT_ERRORS.get(language, MAX_LINT_ERRORS_DEFAULT): 
         result = rejection("rejected_lint", f"Too many lint violations: {lint_errors}")
     elif cycl_complexity > MAX_COMPLEXITY:
         result = rejection("rejected_complexity", f"Cyclomatic complexity too high: {cycl_complexity}")

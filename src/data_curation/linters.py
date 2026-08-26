@@ -3,7 +3,7 @@ import os
 import subprocess
 import lizard
 import threading
-from src.data_curation.curation_config import PMD_TIMEOUT_SECONDS, CLIPPY_TIMEOUT_SECONDS, DOTNET_TIMEOUT_SECONDS, RUFF_TIMEOUT_SECONDS, CPPLINT_TIMEOUT_SECONDS, ESLINT_TIMEOUT_SECONDS, GOLANG_TIMEOUT_SECONDS, TSC_TIMEOUT_SECONDS
+from src.data_curation.curation_config import PMD_TIMEOUT_SECONDS, CLIPPY_TIMEOUT_SECONDS, DOTNET_TIMEOUT_SECONDS, RUFF_TIMEOUT_SECONDS, CPPLINT_TIMEOUT_SECONDS, ESLINT_TIMEOUT_SECONDS, GOLANG_TIMEOUT_SECONDS
 
 # CSHARP_PROJ_DIR = None
 csharp_local = threading.local()
@@ -25,7 +25,7 @@ def ruff_check(code: str) -> int:
         tmp.flush()
         try:
             result = subprocess.run(
-                ["ruff", "check", "--select=E,W,F,N", "--output-format=concise", tmp.name], 
+                ["ruff", "check", "--select=F,E9", "--output-format=concise", tmp.name], 
                 capture_output=True, 
                 text=True,
                 timeout=RUFF_TIMEOUT_SECONDS
@@ -41,7 +41,10 @@ def cpplint_check(code: str) -> int:
         tmp.flush()
         try:
             result = subprocess.run(
-                ["cpplint", "--counting=detailed", tmp.name], 
+                ["cpplint",
+                 "--filter=-legal,-build/header_guard,-build/include_order,"
+                 "-build/namespaces,-whitespace,-readability/casting",
+                 "--counting=total", tmp.name], 
                 capture_output=True, 
                 text=True, 
                 check=False,
@@ -49,10 +52,14 @@ def cpplint_check(code: str) -> int:
             )
         except subprocess.TimeoutExpired:
             return -1
-    return len([
-        line for line in result.stderr.splitlines() 
-        if "Artifact" not in line and "Total errors found" not in line and line.strip()
-    ])
+    # cpplint writes to stderr; last line is "Total errors found: N"
+    for line in reversed(result.stderr.splitlines()):
+        if "Total errors found:" in line:
+            try:
+                return int(line.split(":")[-1].strip())
+            except ValueError:
+                break
+    return 0
 
 def eslint_check(code: str) -> int:
     rules_json = '{"no-undef": "error", "no-unused-vars": "warn", "no-redeclare": "error", "no-dupe-keys": "error", "no-unreachable": "error", "no-constant-condition": "error", "no-empty": "warn", "valid-typeof": "error"}'
@@ -105,15 +112,20 @@ def clippy_check(code: str) -> int:
     out = result.stderr.strip()
     if not out:
         return 0
-    return len([line for line in out.split('\n') if line.startswith("error:") or line.startswith("warning:")])
+    # Only count clippy warnings (code quality lint), not compilation errors.
+    # Compilation errors on standalone snippets are missing-crate issues, not quality signals.
+    return len([line for line in out.split('\n') if line.startswith("warning:")])
 
-def golangci_lint_check(code: str) -> int: #considerar si golangci-lint o revive
+def golangci_lint_check(code: str) -> int:
     with tempfile.NamedTemporaryFile(suffix=".go", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
         tmp.flush()
         try:
             result = subprocess.run(
-                ["golangci-lint", "run", "--out-format=line-number", tmp.name],
+                ["golangci-lint", "run",
+                 "--enable=govet,errcheck,staticcheck",
+                 "--disable-all",
+                 "--out-format=line-number", tmp.name],
                 capture_output=True, text=True, check=False,
                 timeout=GOLANG_TIMEOUT_SECONDS
             )
@@ -125,21 +137,32 @@ def golangci_lint_check(code: str) -> int: #considerar si golangci-lint o revive
     return len(out.split('\n'))
 
 def tsc_check(code: str) -> int:
+    """Lint TypeScript with eslint (semantic rules only, no type-checking).
+
+    tsc --noEmit performs full type resolution and rejects any snippet with
+    unresolved imports/types — that's not a code quality signal for standalone
+    snippets. Using eslint with the same semantic rules as JavaScript gives a
+    fair quality gate.
+    """
+    rules_json = '{"no-undef": "error", "no-unused-vars": "warn", "no-redeclare": "error", "no-dupe-keys": "error", "no-unreachable": "error", "no-constant-condition": "error", "no-empty": "warn", "valid-typeof": "error"}'
     with tempfile.NamedTemporaryFile(suffix=".ts", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
         tmp.flush()
         try:
             result = subprocess.run(
-                ["tsc", "--noEmit", tmp.name],
-                capture_output=True, text=True, check=False,
-                timeout=TSC_TIMEOUT_SECONDS
+                ["eslint", "--no-eslintrc", "--rule", rules_json,
+                 "--format", "compact", tmp.name],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=ESLINT_TIMEOUT_SECONDS
             )
         except subprocess.TimeoutExpired:
             return -1
     out = result.stdout.strip()
     if not out:
         return 0
-    return len([line for line in out.split('\n') if "error TS" in line])
+    return len([line for line in out.split('\n') if "Error" in line or "Warning" in line])
 
 def get_csharp_project() -> str:
     if not hasattr(csharp_local, "proj_dir"):
@@ -179,7 +202,9 @@ def csharp_check(code: str) -> int:
     out = result.stdout.strip()
     if not out:
         return 0
-    return len([line for line in out.split('\n') if " warning CS" in line or " error CS" in line])
+    # Only count warnings (code quality signals like CS0219 unused variable),
+    # not compilation errors (CS0246 missing namespace — snippet context issue).
+    return len([line for line in out.split('\n') if " warning CS" in line])
 
 def get_cyclomatic_complexity(code: str, language: str) -> int:
     ext = LIZARD_EXTENSION.get(language, ".txt")
