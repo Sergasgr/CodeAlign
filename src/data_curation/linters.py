@@ -5,7 +5,6 @@ import lizard
 import threading
 from src.data_curation.curation_config import PMD_TIMEOUT_SECONDS, CLIPPY_TIMEOUT_SECONDS, DOTNET_TIMEOUT_SECONDS, RUFF_TIMEOUT_SECONDS, CPPLINT_TIMEOUT_SECONDS, ESLINT_TIMEOUT_SECONDS, GOLANG_TIMEOUT_SECONDS
 
-# CSHARP_PROJ_DIR = None
 csharp_local = threading.local()
 
 LIZARD_EXTENSION = {
@@ -52,7 +51,7 @@ def cpplint_check(code: str) -> int:
             )
         except subprocess.TimeoutExpired:
             return -1
-    # cpplint writes to stderr; last line is "Total errors found: N"
+
     for line in reversed(result.stderr.splitlines()):
         if "Total errors found:" in line:
             try:
@@ -81,7 +80,7 @@ def eslint_check(code: str) -> int:
         return 0
     return len([line for line in out.split('\n') if "Error" in line or "Warning" in line])
 
-def pmd_check(code: str) -> int: #considerar si pmd o checkstyle
+def pmd_check(code: str) -> int:
     with tempfile.NamedTemporaryFile(suffix=".java", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
         tmp.flush()
@@ -91,7 +90,7 @@ def pmd_check(code: str) -> int: #considerar si pmd o checkstyle
                 capture_output=True, text=True, check=False, timeout=PMD_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
-            return -1  # infra timeout, no confundir con conteo real de errores
+            return -1  
     out = result.stdout.strip()
     if not out or "No problems found" in out:
         return 0
@@ -112,8 +111,6 @@ def clippy_check(code: str) -> int:
     out = result.stderr.strip()
     if not out:
         return 0
-    # Only count clippy warnings (code quality lint), not compilation errors.
-    # Compilation errors on standalone snippets are missing-crate issues, not quality signals.
     return len([line for line in out.split('\n') if line.startswith("warning:")])
 
 def golangci_lint_check(code: str) -> int:
@@ -137,13 +134,6 @@ def golangci_lint_check(code: str) -> int:
     return len(out.split('\n'))
 
 def tsc_check(code: str) -> int:
-    """Lint TypeScript with eslint (semantic rules only, no type-checking).
-
-    tsc --noEmit performs full type resolution and rejects any snippet with
-    unresolved imports/types — that's not a code quality signal for standalone
-    snippets. Using eslint with the same semantic rules as JavaScript gives a
-    fair quality gate.
-    """
     rules_json = '{"no-undef": "error", "no-unused-vars": "warn", "no-redeclare": "error", "no-dupe-keys": "error", "no-unreachable": "error", "no-constant-condition": "error", "no-empty": "warn", "valid-typeof": "error"}'
     with tempfile.NamedTemporaryFile(suffix=".ts", delete=True) as tmp:
         tmp.write(code.encode('utf-8'))
@@ -168,13 +158,18 @@ def get_csharp_project() -> str:
     if not hasattr(csharp_local, "proj_dir"):
         tmpdir = tempfile.mkdtemp(prefix="codealign_csharp_")
         try:
-            subprocess.run(
+            env = os.environ.copy()
+            env["DOTNET_CLI_HOME"] = tmpdir
+            result = subprocess.run(
                 ["dotnet", "new", "console", "-n", "TempProj"],
                 cwd=tmpdir, 
                 capture_output=True, 
                 check=False,
-                timeout=DOTNET_TIMEOUT_SECONDS
+                timeout=DOTNET_TIMEOUT_SECONDS,
+                env=env
             )
+            if result.returncode != 0:
+                raise RuntimeError(f"C# Project initialization failed: {result.stderr.decode('utf-8', errors='ignore')}")
         except subprocess.TimeoutExpired:
             raise RuntimeError("C# Project initialization timed out. Network issue or dead lock.")
         csharp_local.proj_dir = os.path.join(tmpdir, "TempProj")
@@ -187,6 +182,8 @@ def csharp_check(code: str) -> int:
     with open(program_path, "w", encoding="utf-8") as f:
         f.write(code)
         
+    env = os.environ.copy()
+    env["DOTNET_CLI_HOME"] = os.path.dirname(proj_dir)
     try:
         result = subprocess.run(
             ["dotnet", "build", "--nologo", "-clp:NoSummary"],
@@ -194,7 +191,8 @@ def csharp_check(code: str) -> int:
             capture_output=True, 
             text=True, 
             check=False,
-            timeout=DOTNET_TIMEOUT_SECONDS 
+            timeout=DOTNET_TIMEOUT_SECONDS,
+            env=env
         )
     except subprocess.TimeoutExpired:
         return -1 # Infra timeout
@@ -202,8 +200,6 @@ def csharp_check(code: str) -> int:
     out = result.stdout.strip()
     if not out:
         return 0
-    # Only count warnings (code quality signals like CS0219 unused variable),
-    # not compilation errors (CS0246 missing namespace — snippet context issue).
     return len([line for line in out.split('\n') if " warning CS" in line])
 
 def get_cyclomatic_complexity(code: str, language: str) -> int:

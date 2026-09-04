@@ -13,7 +13,7 @@ DS_NAME = "bigcode/commitpackft"
 LANGUAGE_CONFIGS = {
     "python": "python",
     "java": "java",
-    "cpp": "c++",  # HF normalizes "c++" in parquet paths; 4602 rows verified
+    "cpp": "c++",
     "c_sharp": "c#",
     "javascript": "javascript",
     "typescript": "typescript",
@@ -29,8 +29,6 @@ ALLOWED_LICENSES = {
 
 # DATA CURATION PARAMETERS
 # Per-language lint thresholds — each tool has different granularity.
-# ESLint/PMD are coarse-grained (focused semantic rules), cpplint/dotnet
-# are noisier for standalone snippets. See diagnostic analysis for rationale.
 MAX_LINT_ERRORS: dict[str, int] = {
     "python": 3,       # ruff (F,E9 only — real bugs, not style)
     "java": 3,         # PMD (errorprone + bestpractices — focused)
@@ -43,9 +41,8 @@ MAX_LINT_ERRORS: dict[str, int] = {
 }
 MAX_LINT_ERRORS_DEFAULT = 3
 MAX_COMPLEXITY = 10
-THRESHOLD = 0.85
 
-# MINHAS/LSH PARAMETERS
+# MINHASH/LSH PARAMETERS
 DEDUP_THRESHOLD = 0.85
 MINHASH_NUM_PERM = 128
 
@@ -61,5 +58,4 @@ RUFF_TIMEOUT_SECONDS = 30
 CPPLINT_TIMEOUT_SECONDS = 30
 ESLINT_TIMEOUT_SECONDS = 30
 GOLANG_TIMEOUT_SECONDS = 30
-TSC_TIMEOUT_SECONDS = 30
 DOTNET_TIMEOUT_SECONDS = 120

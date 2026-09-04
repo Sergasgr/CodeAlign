@@ -18,7 +18,7 @@ $$R_{\text{total}} = w_1 R_{\text{exec}} + w_2 R_{\text{static}} + w_3 R_{\text{
 |-----------|--------|---------|
 | $R_{\text{exec}}$ | Binary (execution success) | Functional correctness |
 | $R_{\text{static}}$ | Cyclomatic complexity (continuous) | Code maintainability |
-| $R_{\text{style}}$ | Lint violations (ruff / cpplint) | Style adherence |
+| $R_{\text{style}}$ | Lint violations (per-language linters) | Style adherence |
 
 This aligns the model's objective with the *human* objective: **clean, maintainable, working code**.
 
@@ -40,8 +40,8 @@ Phases 0–6 are implemented. See the [Roadmap](#roadmap) below.
 
 ## Scope (v1)
 
-- **Languages: Python, Java, C++, C#, JavaScript, TypeScript, Go, Rust.** These map onto JetBrains' own primary IDE lineup (PyCharm, IntelliJ IDEA, CLion, Rider, WebStorm) — a deliberate choice, not an arbitrary list, and it spans genuinely different paradigms (dynamic scripting, statically-typed OOP, systems-level manual memory, gradually-typed web) rather than six near-identical languages. Earlier drafts of this project scoped v1 to Python only; that changed once the dataset (see below) turned out to be multi-language by construction and multi-language support became an explicit goal rather than an accident of the data.
-- **Validation approach:** two signals apply uniformly across all six languages — syntax validity (via [`tree-sitter`](https://tree-sitter.github.io/tree-sitter/) grammars, which parse without needing a full compiler toolchain or resolvable imports — important since these are code snippets/diffs, not complete buildable projects; note this is a Concrete Syntax Tree, not an AST, so it's called syntax validation throughout rather than "AST validation") and cyclomatic complexity (via [`lizard`](https://github.com/terryyin/lizard), which already supports all six languages out of the box). Style/lint scoring is a best-effort third signal, applied only where a low-friction, pip-installable linter exists for v1: `ruff` for Python, `cpplint` for C++. The other four languages are gated on syntax + complexity alone for now — that's a real trade-off (documented here rather than silently applied), not an oversight; adding `eslint`/PMD-equivalent/`csharp` linters later means installing their native toolchains (Node, JDK, .NET SDK), which is a reasonable Phase 7-level addition (see Roadmap) rather than a Phase 1 blocker.
+- **Languages: Python, Java, C++, C#, JavaScript, TypeScript, Go, Rust.** These map onto JetBrains' own primary IDE lineup (PyCharm, IntelliJ IDEA, CLion, Rider, WebStorm) — a deliberate choice, not an arbitrary list, and it spans genuinely different paradigms (dynamic scripting, statically-typed OOP, systems-level manual memory, gradually-typed web) rather than eight near-identical languages. Earlier drafts of this project scoped v1 to Python only; that changed once the dataset (see below) turned out to be multi-language by construction and multi-language support became an explicit goal rather than an accident of the data.
+- **Validation approach:** three signals apply across all eight languages — syntax validity (via [`tree-sitter`](https://tree-sitter.github.io/tree-sitter/) grammars, which parse without needing a full compiler toolchain or resolvable imports — important since these are code snippets/diffs, not complete buildable projects; note this is a Concrete Syntax Tree, not an AST, so it's called syntax validation throughout rather than "AST validation"), cyclomatic complexity (via [`lizard`](https://github.com/terryyin/lizard), which supports all eight languages out of the box), and **lint scoring** via per-language tools: `ruff` (Python), `cpplint` (C++), `eslint` (JavaScript and TypeScript), `PMD` (Java), `clippy` (Rust), `golangci-lint` (Go), and `dotnet build` warnings (C#). Each linter is configured to flag semantic bugs and code quality issues rather than pure style violations — per-language thresholds account for differences in tool granularity (see `curation_config.py`). The native toolchains (Node, JDK, .NET SDK, Rust, Go) are bundled in `docker/Dockerfile.executor`.
 - **Duplication:** two distinct checks, not one. An internal-duplication / code-smell check flags copy-pasted blocks *within* a single sample (a DRY violation — is this one piece of code repeating itself). A separate MinHash/LSH near-duplicate index flags samples that are near-identical to *another sample already accepted* (dataset-level redundancy — protects against wasting training signal on repeated examples). They catch different problems; both are active.
 - **Base model: [`Qwen2.5-Coder-7B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct).** Chosen because it is already code-pretrained, dense (single-GPU feasible), and well supported by the Hugging Face / TRL / PEFT stack. A general-purpose instruct model (e.g. Llama-3.1-8B-Instruct) may be added later purely as an ablation baseline, to measure how much starting from a code-specialized model actually matters.
 
@@ -49,23 +49,23 @@ Phases 0–6 are implemented. See the [Roadmap](#roadmap) below.
 
 Documented up front so the project's resource footprint is explicit, not an afterthought.
 
-- **Hardware target:** 1x GPU with 24 GB VRAM — RTX 3090 / 4090 locally, or L4 / RTX A5000 / RTX 3090 on a rental provider (RunPod Community Cloud pricing, ≈$0.30–$0.70/hr depending on GPU model, as of July 2026).
+- **Hardware target:** 1x GPU with 24 GB VRAM — RTX 3090 / 4090 locally, or L4 / RTX A5000 / RTX 3090 on a rental provider (RunPod Community Cloud pricing, ≈\$0.30–\$0.70/hr depending on GPU model, as of July 2026).
 - **Training method:** QLoRA (4-bit) for both SFT and DPO, via TRL + PEFT + bitsandbytes. Full fine-tuning of a 7B model is out of scope for a single-GPU portfolio budget.
 - **Estimated compute:** ~25–40 GPU-hours total, covering SFT, DPO preference-pair generation (sandboxed execution + scoring), DPO training, and evaluation of all three checkpoints. Data curation (Phase 1) is CPU-bound and not part of this GPU-hour estimate. The range is wide on purpose — it accounts for debugging and re-runs, not just a single idealized pass.
-- **Estimated cost:** ~$10–$30 total.
+- **Estimated cost:** ~\$10–\$30 total.
 - These are planning estimates. They will be replaced with measured numbers once Phase 2 (SFT) produces real wall-clock data.
 
 ## Training data
 
 - **Dataset: [`bigcode/commitpackft`](https://huggingface.co/datasets/bigcode/commitpackft).** Real commits from permissively-licensed GitHub repositories, filtered by the BigCode team to keep only commit messages that read as natural-language instructions — used to train OctoCoder in the [OctoPack paper](https://arxiv.org/abs/2308.07124). 702K samples across 277 languages, ~1.6 GB. Each sample carries an explicit per-sample `license` field, and content is real developer code (bug fixes, feature additions), not LLM-synthesized — this sidesteps the OpenAI-terms-of-use ambiguity that came up with the previously-considered `Magicoder-OSS-Instruct-75K` (GPT-3.5-generated) and is arguably a better fit for an IDE-assistant use case than isolated algorithmic puzzles.
 - **License filter:** restricted to samples tagged `mit`, `apache-2.0`, `bsd-2-clause`, `bsd-3-clause`, `isc`, `unlicense`, or `cc0-1.0`. The dataset's own license list also includes `agpl-3.0`, `lgpl-2.1`, `epl-1.0`, `mpl-2.0` and `unknown` — those are copyleft or ambiguous, not permissive in the strict sense, and are excluded even though the dataset card describes the whole set as "permissively licensed."
-- **Language filter:** restricted to the six languages in scope (see above). Everything else (`yaml`, `json`, `markdown`, `html`, `css`, and 270+ others) is dropped — most of it isn't code in the sense this project cares about anyway.
+- **Language filter:** restricted to the eight languages in scope (see above). Everything else (`yaml`, `json`, `markdown`, `html`, `css`, and 270+ others) is dropped — most of it isn't code in the sense this project cares about anyway.
 - **Format — two prompt types, not one, both derived from CommitPackFT itself:** samples where `old_contents` is empty or trivial (≤3 meaningful lines — a new file) are framed as **write-from-spec**: instruction only, no code context, target is `new_contents`. Samples with substantial `old_contents` are framed as **in-context edit**: existing file + instruction, target is `new_contents`. The instruction itself prefers `message` (full commit body) over `subject` (short line) whenever it adds real detail.
 
   Why both, not just one: in-context editing is realistic IDE-assistant behavior ("fix/refactor this"), but Phase 5's evaluation benchmarks (HumanEval, MBPP) are entirely write-from-spec in shape — training exclusively on in-context edits would leave a real mismatch between the SFT/DPO training distribution and what the project's own evaluation measures. Splitting on `old_contents` size gets both formats from the one dataset already vetted for license and language quality, rather than reintroducing a second dataset (with Magicoder's OpenAI-terms and language-labeling problems) or hand-writing prompts. The split point (`NEW_FILE_LINE_THRESHOLD` in `curation_config.py`) is a starting heuristic — Phase 1's report notebook tracks the resulting `edit`/`new_file` mix so it can be checked empirically rather than assumed.
 
   This replaces the markdown-fence extraction used for the previous dataset candidate — `new_contents` is already raw source, and each language's own config file (not a self-reported per-row label) is what determines its language, so it doesn't need the same defensive handling Magicoder's `lang` column did.
-- **Validation:** every `new_contents` sample passes through the syntax + complexity (+ lint, where available) checks above before entering the SFT set. Samples that fail are discarded — see Phase 1.
+- **Validation:** every `new_contents` sample passes through the syntax + complexity + lint checks above before entering the SFT set. Samples that fail are discarded — see Phase 1.
 
 ## Roadmap
 
@@ -119,7 +119,7 @@ $$R_{\text{total}} = w_1 R_{\text{exec}} + w_2 R_{\text{static}} + w_3 R_{\text{
 |-----------|--------|--------|---------|
 | $R_{\text{exec}}$ | Binary (execution success) | `w₁ = 1.0` | Functional correctness |
 | $R_{\text{static}}$ | Negative, proportional to cyclomatic complexity (continuous) | `w₂ = 0.1` | Code quality metrics — force simplicity and adherence to best practices |
-| $R_{\text{style}}$ | Penalty for violating PEP-8 (ruff) / cpplint conventions | `w₃ = 0.2` | Style adherence |
+| $R_{\text{style}}$ | Penalty for lint violations (per-language linters) | `w₃ = 0.2` | Style adherence |
 
 It aligns the model's objective with the human objective: clean, maintainable, working code. Introducing a continuous penalty for high cyclomatic complexity prevents reward hacking and ensures the model produces maintainable, idiomatic code.
 
@@ -141,9 +141,11 @@ The Case C percentage is the single most important metric of the project — if 
 
 ### Implementation
 
-- **Sandbox:** `DockerSandbox` — ephemeral containers with `network_disabled=True`, `mem_limit=128m`, `timeout` enforcement. Multi-language: Python, JavaScript, TypeScript, Java, C++, Go, Rust (matching Phase 1's language scope). Image: `docker/Dockerfile.executor` (Python 3.11-slim, non-root user, no pip — candidates that import third-party packages fail, which is intended).
-- **Candidate generation:** `CandidateGenerator` — loads the SFT checkpoint (`checkpoints/sft/final_model`) with QLoRA (4-bit NF4), generates `N_CANDIDATES=2` completions per prompt. Code is extracted from markdown fences if present (`parse_code`).
-- **Orchestrator:** `PreferenceOrchestrator` — wires generation → execution → scoring → labelling. Reuses Phase 1's `linter_check()` and `get_cyclomatic_complexity()` for the static-analysis components of the composite reward.
+- **Sandbox:** `DockerSandbox` — communicates via gRPC with the Rust execution daemon (see [below](#advanced-high-performance-rust-executor-daemon)). Ephemeral containers with `network_disabled=True`, `mem_limit=128m`, `timeout=10s`. Multi-language: Python, JavaScript, TypeScript, Java, C++, C#, Go, Rust (matching Phase 1's language scope). Image: `docker/Dockerfile.executor` (ubuntu:24.04, non-root user, all eight language toolchains installed).
+- **Candidate generation:** `CandidateGenerator` — loads the SFT checkpoint (`checkpoints/sft/merged_model`) with QLoRA (4-bit NF4), generates `N_CANDIDATES=2` completions per prompt. Code is extracted from markdown fences if present (`parse_code`). Supports **batched generation** (`generate_candidates_batch`): multiple prompts are left-padded and processed in a single GPU forward pass, giving ~4× throughput vs. single-prompt inference.
+- **Orchestrator:** `PreferenceOrchestrator` — wires generation → execution → scoring → labelling. Reuses Phase 1's `linter_check()` and `get_cyclomatic_complexity()` for the static-analysis components of the composite reward. The batch path (`create_preference_pairs_batch`) runs sandbox evaluations concurrently via `ThreadPoolExecutor` (up to 8 workers), overlapping I/O-bound gRPC calls with CPU-bound linting.
+- **Checkpoint / resume:** progress is saved to `.checkpoint_{reward_mode}.json` after every batch. If the process is interrupted, relaunching the same command resumes from the last completed batch — output files are opened in append mode, already-processed prompts are skipped. The checkpoint is deleted automatically on successful completion.
+- **Batch size:** controlled by `BATCH_SIZE` in `preference_generation_config.py` (default: 8). Tune down if GPU runs out of memory, up if VRAM allows.
 - **Report notebook:** `src/notebooks/03_preference_generation_report.ipynb` — case distribution (bar + pie), composite score histograms (chosen vs. rejected), cyclomatic complexity boxplots, lint error boxplots, per-language breakdown, qualitative samples.
 
 ## Phase 4 — DPO Training
@@ -199,9 +201,9 @@ This produces a DPO model trained on binary pass/fail preferences only (no quali
 
 ### Implementation
 
-- **Evaluation harness:** `scripts/05_run_eval_harness.sh` — runs [`bigcode-evaluation-harness`](https://github.com/bigcode-project/bigcode-evaluation-harness) on all four checkpoints (Base, SFT, DPO composite, DPO ablation), saves generations and pass@1 metrics to `data/evaluation/`.
-- **Static analysis:** `src/evaluation/static_analysis.py` — computes cyclomatic complexity and lint errors on every generated sample using Phase 1's `linter_check()`, writes `data/evaluation/static_analysis_results.jsonl`.
-- **Qualitative extraction:** `src/evaluation/extract_qualitative.py` — finds problems where the ablation model produces more complex code than the composite model, writes side-by-side markdown to `data/evaluation/qualitative_samples.md`.
+- **Evaluation harness:** `scripts/05_run_eval_harness.sh` — runs [`bigcode-evaluation-harness`](https://github.com/bigcode-project/bigcode-evaluation-harness) on all four checkpoints (Base, SFT, DPO composite, DPO ablation), saves generations and pass@1 metrics to `data/evaluation/`. Supports multi-language evaluation via `bash scripts/05_run_eval_harness.sh <lang>` (defaults to `python`; other languages use MultiPL-E).
+- **Static analysis:** `src/evaluation/static_analysis.py` — computes cyclomatic complexity and lint errors on every generated sample using Phase 1's `linter_check()`, writes `data/evaluation/static_analysis_results_{lang}.jsonl`.
+- **Qualitative extraction:** `src/evaluation/extract_qualitative.py` — finds problems where the ablation model produces more complex code than the composite model, writes side-by-side markdown to `data/evaluation/qualitative_samples_{lang}.md`.
 - **Report notebook:** `src/notebooks/05_evaluation_report.ipynb` — the most important notebook of the project. Contains: pass@1 bar chart, static-analysis aggregate table, the ablation boxplots (the star graph), four-way comparison, inline qualitative samples, summary table, and key findings template.
 
 ## Phase 6 — Interactive Demo
@@ -212,7 +214,7 @@ A Gradio app where a recruiter can paste a coding prompt and see three outputs (
 
 - **Three columns, live metrics.** Each column shows the generated code (`gr.Code` with Python highlighting) and two numbers: cyclomatic complexity and lint errors — computed on the fly using Phase 1's `linter_check()`. This makes the composite-reward thesis visible in real time: the DPO column should consistently show lower complexity and fewer lint errors than the Base column.
 - **Preset examples.** Five prompts (palindrome check, LCS, binary search, flatten nested list, thread-safe LRU cache) so the demo works with a single click — no typing needed.
-- **Same QLoRA loading pattern.** All three models load in 4-bit NF4 with the same `BitsAndBytesConfig` used during training. SFT and DPO are loaded as `PeftModel` adapters on the base model. Three instances fit in ~15 GB VRAM total.
+- **Same QLoRA loading pattern.** All three models load in 4-bit NF4 with the same `BitsAndBytesConfig` used during training. SFT and DPO are loaded as `PeftModel` adapters on separate base instances. Three instances fit in ~12 GB VRAM total.
 
 ### Running
 
@@ -225,10 +227,8 @@ uv run python demo/app.py
 
 None of these block Phases 1–6. Listed here so the scope decisions behind them are explicit rather than assumed. These address key risks and limitations of the current pipeline:
 
-- **Lightweight RL comparison (GRPO vs DPO).** A `GRPOTrainer` run (via TRL) using the same composite reward built for DPO, compared against the DPO result. For a complete research portfolio, comparing direct differentiation methods (DPO/ORPO) against online reinforcement learning (PPO/GRPO) is the standard. This covers the "reinforcement learning" requirement from the original JetBrains internship posting.
-- **Multi-Language Evaluation (MultiPL-E).** Currently, `bigcode-evaluation-harness` is configured for Python (HumanEval). To prove the generalizability of our composite reward, evaluation must be extended to Rust and Go using MultiPL-E. The training dataset and sandbox already support these languages, but the final benchmarking step is currently Python-centric.
-- **Rust execution daemon (gRPC / Tonic).** Formalize the sandboxed code-executor (used for DPO preference generation, Phase 3) as a robust, high-performance async service in Rust. Moving from simple subprocess calls to a formal **gRPC architecture using `tonic`** is the industry standard for scalable, language-agnostic service-oriented execution.
-- **Docker image with native linter toolchains.** Extending the executor Docker image to include `clippy` (rustup) and `golangci-lint` (Go), establishing Rust and Go as fully-supported languages in the composite reward pipeline (currently gated only by tree-sitter syntax and cyclomatic complexity).
+- **Lightweight RL comparison (GRPO vs DPO).** A `GRPOTrainer` run (via TRL) using the same composite reward built for DPO, compared against the DPO result. For a complete research portfolio, comparing direct differentiation methods (DPO/ORPO) against online reinforcement learning (PPO/GRPO) is the standard. This covers the "reinforcement learning" requirement from the original JetBrains internship posting. Implementation scaffolding is already in place (`src/training/grpo_config.py`, `src/training/grpo_trainer.py`).
+- **Multi-Language Evaluation (MultiPL-E).** Currently, `bigcode-evaluation-harness` is configured for Python (HumanEval). To prove the generalizability of our composite reward, evaluation must be extended to Rust and Go using MultiPL-E. The training dataset, sandbox, and evaluation scripts already support multi-language via `--language` / `{lang}` patterns, but the final benchmarking step is currently Python-centric.
 
 Not listed here because it's already addressed elsewhere: Unsloth (TRL's SFT/DPO speed-up) is an optional dependency group for Phases 2/4, not a Phase 7 item — see [Compute budget](#compute-budget) and `pyproject.toml`.
 
@@ -266,33 +266,37 @@ codealign/
 │   │   ├── dpo_dataset.jsonl        # clean pairs for DPOTrainer
 │   │   └── dpo_report.jsonl         # all results with full metadata (notebook)
 │   └── evaluation/           # Phase 5 results
-│       ├── *_generations.json       # raw code from each model
-│       ├── *_metrics.json           # pass@1 from harness
-│       ├── static_analysis_results.jsonl  # CC + lint per sample
-│       └── qualitative_samples.md   # side-by-side ablation examples
+│       ├── *_generations_{lang}.json       # raw code from each model
+│       ├── *_metrics_{lang}.json           # pass@1 from harness
+│       ├── static_analysis_results_{lang}.jsonl  # CC + lint per sample
+│       └── qualitative_samples_{lang}.md   # side-by-side ablation examples
 ├── src/
 │   ├── __init__.py
 │   ├── data_curation/        # Phase 1
-│   │   ├── curation_config.py   # language/license whitelists, thresholds
+│   │   ├── curation_config.py   # language/license whitelists, per-language lint thresholds
 │   │   ├── dataset.py           # loads CommitPackFT per-language via HF
 │   │   ├── prompts.py           # builds new_file/edit prompts + ChatML conversion
 │   │   ├── validators.py        # orchestrates checks → check_code()
-│   │   ├── linters.py           # ruff / cpplint / lizard (complexity)
+│   │   ├── linters.py           # ruff / cpplint / eslint / PMD / clippy / golangci-lint / dotnet
 │   │   ├── code_smells.py       # internal (within-sample) duplication
 │   │   ├── minhash.py           # cross-sample near-duplicate index
 │   │   └── main.py              # loads CommitPackFT, runs the pipeline
 │   ├── preference_generation/   # Phase 3
 │   │   ├── preference_generation_config.py  # model, sandbox, reward weights, W&B
 │   │   ├── candidate_generator.py           # dual-temperature generation from SFT
-│   │   ├── docker_sandbox.py                # isolated execution (multi-language)
+│   │   ├── docker_sandbox.py                # gRPC client → Rust executor daemon
 │   │   ├── preference_orchestrator.py       # A/B/C labelling + composite reward
+│   │   ├── executor_pb2.py                  # generated protobuf (do not edit)
+│   │   ├── executor_pb2_grpc.py             # generated gRPC stubs (do not edit)
 │   │   └── main.py                          # pipeline entry point, W&B tracking
-│   ├── training/                # Phase 2 & 4
+│   ├── training/                # Phase 2, 4 & 7
 │   │   ├── sft_config.py        # SFT hyperparameters, model paths, seed, W&B
 │   │   ├── sft_trainer.py       # SFT training script
 │   │   ├── merge_sft.py         # merges LoRA adapter into base for DPO
 │   │   ├── dpo_config.py        # DPO hyperparameters (β, model paths, seed, W&B)
-│   │   └── dpo_trainer.py       # DPO training script
+│   │   ├── dpo_trainer.py       # DPO training script (--reward_mode for ablation)
+│   │   ├── grpo_config.py       # GRPO hyperparameters (Phase 7)
+│   │   └── grpo_trainer.py      # GRPO training with composite reward func (Phase 7)
 │   ├── evaluation/              # Phase 5
 │   │   ├── evaluation_config.py     # paths, model checkpoints, thresholds
 │   │   ├── static_analysis.py      # CC + lint on all generated code
@@ -305,6 +309,7 @@ codealign/
 │       ├── 05_evaluation_report.ipynb   # ⭐ the most important notebook
 │       └── 06_grpo_rl_report.ipynb      # Phase 7 (GRPO vs DPO & Multi-language)
 ├── demo/                    # Phase 6 — interactive Gradio app
+│   ├── __init__.py
 │   ├── app.py               # three-column side-by-side comparison UI
 │   └── demo_config.py       # model paths, generation params, server port
 ├── scripts/                 # thin CLI wrappers per phase
@@ -314,9 +319,12 @@ codealign/
 │   └── 05_run_eval_harness.sh
 ├── tests/                   # unit tests
 ├── docker/
-│   └── Dockerfile.executor  # Phase 3 sandbox image (python:3.11-slim, non-root)
-└── rust-daemon/             # Phase 7 (stretch) — Rust execution daemon
+│   └── Dockerfile.executor  # multi-language sandbox (ubuntu:24.04, non-root)
+└── rust-daemon/             # gRPC execution daemon (tonic + tokio)
     ├── Cargo.toml
+    ├── build.rs             # tonic-build for executor.proto
+    ├── proto/
+    │   └── executor.proto   # gRPC service definition
     └── src/main.rs
 ```
 
@@ -347,10 +355,27 @@ docker run --rm \
 
 # Phase 2 — SFT training + adapter merge
 bash scripts/02_run_sft.sh
+```
 
-# Phase 3 & 4 — Generate preferences and train DPO (Composite & Ablation)
-# This script handles both the execution-only baseline and our composite reward model
-bash scripts/03_04_run_dpo_pipeline.sh
+Phase 3 requires the Rust gRPC daemon running in a separate terminal (see [below](#advanced-high-performance-rust-executor-daemon)).
+
+```bash
+# Phase 3 — generate DPO preference pairs (composite reward)
+# Requires the Rust daemon running in another terminal.
+# Safe to interrupt and resume — checkpoints are saved after every batch.
+uv run python -m src.preference_generation.main --reward_mode composite
+
+# Phase 3 (ablation) — generate execution-only preference pairs
+uv run python -m src.preference_generation.main --reward_mode execution_only
+
+# Phase 4 — DPO training (composite reward)
+uv run python -m src.training.dpo_trainer --reward_mode composite
+
+# Phase 4 (ablation) — DPO training (execution-only baseline)
+uv run python -m src.training.dpo_trainer --reward_mode execution_only
+
+# Or run Phases 3 & 4 together in one shot (both modes sequentially):
+# bash scripts/03_04_run_dpo_pipeline.sh
 
 # Phase 5 — evaluation (all 4 checkpoints)
 bash scripts/05_run_eval_harness.sh
@@ -359,31 +384,48 @@ bash scripts/05_run_eval_harness.sh
 uv run python demo/app.py
 ```
 
-## Advanced: High-Performance Rust Executor Daemon (Phase 7)
+## Advanced: High-Performance Rust Executor Daemon
 
-By default, Phase 3 (Preference Generation) uses Python's subprocess to orchestrate the Docker containers. For a production-grade environment, this project includes a gRPC Rust Daemon using tonic and tokio for asynchronous, high-throughput sandbox execution.
+Phase 3 (Preference Generation) executes candidate code inside Docker containers via gRPC calls to a Rust daemon built with `tonic` and `tokio`. The daemon must be running before launching Phase 3.
 
-To run the pipeline using the Rust daemon instead of Python subprocesses:
-
-### 1. Install system prerequisites (Protocol Buffers compiler):
+### 1. Install system prerequisites (one-time):
 ```bash
-sudo apt update
-sudo apt install protobuf-compiler
-# Verify installation: protoc --version
+# Protocol Buffers compiler — required by tonic-build to compile executor.proto
+sudo apt update && sudo apt install -y protobuf-compiler
+protoc --version  # verify
 ```
 
-### 2. Start the gRPC Server:
+### 2. Build and start the gRPC server (Terminal 1):
 ```bash
 cd rust-daemon
-cargo clean
-cargo run
-# The server will listen on [::1]:3000
+cargo build --release
+cargo run --release
+# ✓ gRPC Server listening on [::1]:3000
 ```
 
-### 3. Run Preference Generation via gRPC:
-Open a new terminal window and run Phase 3, pointing it to the Rust daemon:
+Keep this terminal open — the daemon must stay running throughout Phase 3.
+
+### 3. Run the preference generation pipeline (Terminal 2):
 ```bash
-uv run python -m src.preference_generation.main --reward_mode composite --executor grpc
+# Composite reward (the main experiment)
+uv run python -m src.preference_generation.main --reward_mode composite
+
+# Execution-only reward (ablation baseline)
+uv run python -m src.preference_generation.main --reward_mode execution_only
+```
+
+Both commands are **checkpoint-safe**: if interrupted (Ctrl+C, crash, reboot), re-running the same command resumes from the last completed batch. Progress is saved to `data/preferences/.checkpoint_{mode}.json`.
+
+### 4. Continue to Phase 4 (no daemon needed):
+
+Once preference pairs are generated, you can stop the Rust daemon (Ctrl+C in Terminal 1). DPO training runs entirely on the GPU and does not call the sandbox:
+
+```bash
+# Train composite DPO model
+uv run python -m src.training.dpo_trainer --reward_mode composite
+
+# Train ablation DPO model
+uv run python -m src.training.dpo_trainer --reward_mode execution_only
 ```
 
 ## Acknowledgments

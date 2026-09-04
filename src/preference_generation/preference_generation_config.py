@@ -15,7 +15,7 @@ TOP_P = 0.95
 
 # SANDBOX CONFIG
 SANDBOX_IMAGE_NAME = "codealign-executor:latest"
-EXECUTION_TIMEOUT = 2
+EXECUTION_TIMEOUT = 10
 
 # COMPOSITE REWARD PARAMETERS
 W_EXEC = 1.0 
@@ -27,3 +27,6 @@ DPO_REPORT = "data/preferences/dpo_report.jsonl"
 
 # WANDB CONFIG
 WANDB_RUN_NAME = "phase3-preference-generation"
+
+# BATCHING
+BATCH_SIZE = 8  # prompts per GPU forward pass (tune down if OOM, up if VRAM allows)

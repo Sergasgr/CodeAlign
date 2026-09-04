@@ -12,7 +12,7 @@ class DockerSandbox:
         
     def execute_code(self, code: str, language: str, timeout_seconds: int = EXECUTION_TIMEOUT) -> dict:
         try:
-            request = executor_pb2.ExecutionRequest( # "ExecutionRequest" is not a known attribute of module "src.preference_generation.executor_pb2"
+            request = executor_pb2.ExecutionRequest(
                 language=language, 
                 code=code
             )

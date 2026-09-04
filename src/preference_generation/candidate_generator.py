@@ -60,4 +60,47 @@ class CandidateGenerator():
             candidates.append(clean_code)
             
         return candidates
-            
+
+    def generate_candidates_batch(self, prompts: list[str], n_candidates: int = N_CANDIDATES) -> list[list[str]]:
+        """Generate candidates for multiple prompts in a single batched GPU forward pass."""
+        chat_prompts = [
+            self.tokenizer.apply_chat_template(
+                [{"role": "user", "content": p}],
+                tokenize=False,
+                add_generation_prompt=True
+            )
+            for p in prompts
+        ]
+
+        inputs = self.tokenizer(
+            chat_prompts,
+            return_tensors="pt",
+            padding=True,
+            add_special_tokens=False
+        ).to(self.model.device)
+
+        with torch.no_grad():
+            outputs = self.model.generate( # type: ignore
+                **inputs,
+                do_sample=True,
+                temperature=TEMPERATURE,
+                top_p=TOP_P,
+                max_new_tokens=1024,
+                num_return_sequences=n_candidates,
+                pad_token_id=self.tokenizer.pad_token_id
+            )
+
+        input_length = inputs["input_ids"].shape[1]
+
+        results = []
+        for i in range(len(prompts)):
+            candidates = []
+            for j in range(n_candidates):
+                idx = i * n_candidates + j
+                generated_tokens = outputs[idx][input_length:]
+                raw_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                clean_code = parse_code(raw_text)
+                candidates.append(clean_code)
+            results.append(candidates)
+
+        return results

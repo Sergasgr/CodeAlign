@@ -1,96 +1,10 @@
-   0.099251256s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint error for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: false }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
-   0.099497640s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/sergas/codealign/rust-daemon/target/debug/.fingerprint/rust-daemon-348445a9547d09e7/bin-rust-daemon`
-
-Caused by:
-    No such file or directory (os error 2)
-
-Stack backtrace:
-   0: cargo_util::paths::read_bytes
-   1: cargo_util::paths::read
-   2: cargo::core::compiler::fingerprint::_compare_old_fingerprint
-   3: cargo::core::compiler::fingerprint::prepare_target
-   4: cargo::core::compiler::compile
-   5: <cargo::core::compiler::build_runner::BuildRunner>::compile
-   6: cargo::ops::cargo_compile::compile_ws
-   7: cargo::ops::cargo_compile::compile_with_exec
-   8: cargo::ops::cargo_compile::compile
-   9: cargo::commands::check::exec
-  10: <cargo::cli::Exec>::exec
-  11: cargo::main
-  12: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
-  13: std::rt::lang_start::<()>::{closure#0}
-  14: <&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync as core::ops::function::FnOnce<()>>::call_once
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/ops/function.rs:287:21
-  15: std::panicking::catch_unwind::do_call::<&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync, i32>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:581:40
-  16: std::panicking::catch_unwind::<i32, &dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:544:19
-  17: std::panic::catch_unwind::<&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync, i32>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panic.rs:359:14
-  18: std::rt::lang_start_internal::{closure#0}
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/rt.rs:175:24
-  19: std::panicking::catch_unwind::do_call::<std::rt::lang_start_internal::{closure#0}, isize>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:581:40
-  20: std::panicking::catch_unwind::<isize, std::rt::lang_start_internal::{closure#0}>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:544:19
-  21: std::panic::catch_unwind::<std::rt::lang_start_internal::{closure#0}, isize>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panic.rs:359:14
-  22: std::rt::lang_start_internal
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/rt.rs:171:5
-  23: main
-  24: __libc_start_call_main
-             at ./csu/../sysdeps/nptl/libc_start_call_main.h:58:16
-  25: __libc_start_main_impl
-             at ./csu/../csu/libc-start.c:360:3
-  26: <unknown>
-   0.169249631s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint dirty for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/home/sergas/codealign/rust-daemon/build.rs", Edition2024) }
-   0.169262291s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint:     dirty: PrecalculatedComponentsChanged { old: "1787674568.624979577s (target/flycheck0/stderr)", new: "1787753777.779545928s (target/flycheck0/stderr)" }
-   0.181412408s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint error for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: true }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
-   0.181428589s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/sergas/codealign/rust-daemon/target/debug/.fingerprint/rust-daemon-cc95b297885582cc/test-bin-rust-daemon`
-
-Caused by:
-    No such file or directory (os error 2)
-
-Stack backtrace:
-   0: cargo_util::paths::read_bytes
-   1: cargo_util::paths::read
-   2: cargo::core::compiler::fingerprint::_compare_old_fingerprint
-   3: cargo::core::compiler::fingerprint::prepare_target
-   4: cargo::core::compiler::compile
-   5: <cargo::core::compiler::build_runner::BuildRunner>::compile
-   6: cargo::ops::cargo_compile::compile_ws
-   7: cargo::ops::cargo_compile::compile_with_exec
-   8: cargo::ops::cargo_compile::compile
-   9: cargo::commands::check::exec
-  10: <cargo::cli::Exec>::exec
-  11: cargo::main
-  12: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
-  13: std::rt::lang_start::<()>::{closure#0}
-  14: <&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync as core::ops::function::FnOnce<()>>::call_once
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/ops/function.rs:287:21
-  15: std::panicking::catch_unwind::do_call::<&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync, i32>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:581:40
-  16: std::panicking::catch_unwind::<i32, &dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:544:19
-  17: std::panic::catch_unwind::<&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync, i32>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panic.rs:359:14
-  18: std::rt::lang_start_internal::{closure#0}
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/rt.rs:175:24
-  19: std::panicking::catch_unwind::do_call::<std::rt::lang_start_internal::{closure#0}, isize>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:581:40
-  20: std::panicking::catch_unwind::<isize, std::rt::lang_start_internal::{closure#0}>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panicking.rs:544:19
-  21: std::panic::catch_unwind::<std::rt::lang_start_internal::{closure#0}, isize>
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/panic.rs:359:14
-  22: std::rt::lang_start_internal
-             at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/rt.rs:171:5
-  23: main
-  24: __libc_start_call_main
-             at ./csu/../sysdeps/nptl/libc_start_call_main.h:58:16
-  25: __libc_start_main_impl
-             at ./csu/../csu/libc-start.c:360:3
-  26: <unknown>
+   0.066263407s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: dependency on `build_script_build` is newer than we are 1788475957.276114185s > 1788421000.500560063s "/home/sergas/codealign/rust-daemon"
+   0.066521195s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint dirty for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: false }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
+   0.066622639s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     dirty: UnitDependencyInfoChanged { unit: UnitIndex(92) }
+   0.068054957s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint dirty for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "/home/sergas/codealign/rust-daemon/build.rs", Edition2024) }
+   0.068071138s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="build-script-build"}: cargo::core::compiler::fingerprint:     dirty: PrecalculatedComponentsChanged { old: "1788475957.126107832s (target/.rustc_info.json)", new: "1788475960.973255701s (target/flycheck0/stderr)" }
+   0.078692813s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: dependency on `build_script_build` is newer than we are 1788475957.276114185s > 1788421000.500560063s "/home/sergas/codealign/rust-daemon"
+   0.078934121s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint: fingerprint dirty for rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)/Check { test: true }/TargetInner { name: "rust-daemon", doc: true, ..: with_path("/home/sergas/codealign/rust-daemon/src/main.rs", Edition2024) }
+   0.078951232s  INFO prepare_target{force=false package_id=rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon) target="rust-daemon"}: cargo::core::compiler::fingerprint:     dirty: UnitDependencyInfoChanged { unit: UnitIndex(92) }
    Compiling rust-daemon v0.1.0 (/home/sergas/codealign/rust-daemon)
-error: could not compile `rust-daemon` (bin "rust-daemon" test) due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
-error: could not compile `rust-daemon` (bin "rust-daemon") due to 1 previous error
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s

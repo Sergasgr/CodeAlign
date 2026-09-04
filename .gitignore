@@ -19,10 +19,18 @@ data/evaluation/*
 !data/curated/.gitkeep
 !data/preferences/.gitkeep
 !data/evaluation/.gitkeep
+
+# Checkpoints — ignore everything, including final models (too large for git)
 checkpoints/
+
+# Intermediate training checkpoints (if checkpoints/ rule is ever relaxed)
+checkpoint-*/
+
+# Large model files (catch-all)
 *.gguf
 *.safetensors
 *.bin
+*.pt
 
 # Experiment tracking
 wandb/
@@ -33,8 +41,21 @@ wandb/
 # Rust build artifacts
 rust-daemon/target/
 
+# Preference generation checkpoints (resume files)
+data/preferences/.checkpoint_*.json
+
 # OS
 .DS_Store
 
+# Misc
 /tmp*
 *.rlib
+/rust-daemon/src/code-executor-daemon.rs
+
+# 3rd Party Tools (cloned via notebooks)
+tools/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp

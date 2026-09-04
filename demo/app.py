@@ -17,10 +17,11 @@ from demo.demo_config import (
     SERVER_PORT,
 )
 
-# ¿Va a ir cargando todos los modelos? ¿No debería hacer? -> 
+"""
 # model.disable_adapters()
 # model.set_adapter("sft")
 # model.set_adapter("dpo")
+"""
 
 print("Loading tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
@@ -44,30 +45,21 @@ base_model = AutoModelForCausalLM.from_pretrained(
 print("Loading SFT adapter...")
 sft_model = PeftModel.from_pretrained(
     AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL, 
+        BASE_MODEL,
         quantization_config=bnb_config,
-        device_map="auto", 
+        device_map="auto",
         use_cache=True,
-        adapter_name="sft"
     ),
     SFT_CHECKPOINT,
 )
 
-#print??
-merged_sft_model = AutoModelForCausalLM.from_pretrained(
-    MERGED_SFT_MODEL,
-    quantization_config=bnb_config,
-    device_map="auto"
-)
-
-print("Loading DPO adapter...")
+print("Loading DPO adapter on merged SFT base...")
 dpo_model = PeftModel.from_pretrained(
     AutoModelForCausalLM.from_pretrained(
-        MERGED_SFT_MODEL, 
+        MERGED_SFT_MODEL,
         quantization_config=bnb_config,
         device_map="auto",
         use_cache=True,
-        adapter_name="dpo"
     ),
     DPO_CHECKPOINT,
 )
@@ -101,8 +93,8 @@ def generate(model, prompt: str) -> str:
     new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
     return tokenizer.decode(new_tokens, skip_special_tokens=True)
 
-def format_metrics(code: str) -> str:
-    result = linter_check(code, "python")
+def format_metrics(code: str, language: str = "python") -> str:
+    result = linter_check(code, language)
     cc = result.get("complexity")
     lint = result.get("lint_errors")
     cc_display = cc if cc is not None else "N/A (Syntax Error)"

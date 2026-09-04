@@ -14,7 +14,8 @@ from src.preference_generation.preference_generation_config import (
     WANDB_RUN_NAME,
     W_EXEC,
     W_COMPLEXITY,
-    W_LINT
+    W_LINT,
+    BATCH_SIZE,
 )
 from src.preference_generation.preference_orchestrator import PreferenceOrchestrator
 
@@ -36,7 +37,7 @@ def main():
         type=str, 
         choices=["composite", "execution_only"], 
         default="composite",
-        help="Define los pesos del reward para generar el dataset."
+        help="Reward weights for dataset generation (composite: full reward, execution_only: ablation baseline)."
     )
     args = parser.parse_args()
     
@@ -53,15 +54,19 @@ def main():
         run_name = f"{WANDB_RUN_NAME}-composite"
         tags = ["preference-generation", "sandbox", "composite-reward"]
 
+    os.environ["WANDB_LOG_MODEL"] = "false"
+
     wandb.init(
         project=wandb_project,
         entity=wandb_entity,
         name=run_name,
         tags=tags,
+        resume="allow",
     )
     
     print(f"Initializing orchestrator in mode: {args.reward_mode}")
     print(f"Weights -> Exec: {w_exec}, Comp: {w_comp}, Lint: {w_lint}")
+    print(f"Batch size: {BATCH_SIZE}")
 
     all_data = []
     with open(DS_PATH, "r", encoding="utf-8") as ds:
@@ -70,6 +75,29 @@ def main():
 
     print(f"Loaded {len(all_data)} prompts from {DS_PATH}")
 
+    # ── Checkpoint / Resume ──────────────────────────────────────────
+    checkpoint_dir = Path(dpo_output_path).parent
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_file = checkpoint_dir / f".checkpoint_{args.reward_mode}.json"
+
+    start_idx = 0
+    if checkpoint_file.exists():
+        with open(checkpoint_file) as f:
+            ckpt = json.load(f)
+            start_idx = ckpt.get("processed", 0)
+        if start_idx >= len(all_data):
+            print(f"All {len(all_data)} samples already processed. Nothing to do.")
+            wandb.finish()
+            return
+        print(f"▶ Resuming from sample {start_idx}/{len(all_data)} "
+              f"({start_idx / len(all_data) * 100:.1f}% already done)")
+        file_mode = "a"
+    else:
+        file_mode = "w"
+
+    remaining_data = all_data[start_idx:]
+
+    # ── Init model + sandbox ─────────────────────────────────────────
     print("Initializing SFT model and Docker sandbox...")
     orchestrator = PreferenceOrchestrator(
         w_exec=w_exec, 
@@ -95,45 +123,58 @@ def main():
         "rejected_lint": 0.0,
     }
 
-    Path(DPO_DS).parent.mkdir(parents=True, exist_ok=True)
+    # ── Batched generation loop ──────────────────────────────────────
+    processed_in_session = 0
 
-    with open(dpo_output_path, "w", encoding="utf-8") as dpo_f, \
-         open(report_output_path, "w", encoding="utf-8") as report_f:
+    with open(dpo_output_path, file_mode, encoding="utf-8") as dpo_f, \
+         open(report_output_path, file_mode, encoding="utf-8") as report_f:
 
-        for data in tqdm(all_data, desc="Generating DPO pairs"):
-            prompt = data["messages"][0]["content"]
-            language = data["metadata"]["language"]
+        pbar = tqdm(total=len(all_data), initial=start_idx, desc="Generating DPO pairs")
 
-            result = orchestrator.create_preference_pair(prompt, language)
+        for batch_start in range(0, len(remaining_data), BATCH_SIZE):
+            batch = remaining_data[batch_start:batch_start + BATCH_SIZE]
+            prompts = [d["messages"][0]["content"] for d in batch]
+            languages = [d["metadata"]["language"] for d in batch]
 
-            report_f.write(json.dumps(result, ensure_ascii=False) + "\n")
-            report_f.flush()
-            
-            case = result.get("case", "B")
-            case_key = f"case_{case.lower()}"
-            stats[case_key] = stats.get(case_key, 0) + 1
+            results = orchestrator.create_preference_pairs_batch(prompts, languages)
 
-            if result.get("discarded"):
-                stats["pairs_discarded"] += 1
-                continue
+            for result in results:
+                report_f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                report_f.flush()
 
-            dpo_pair = {
-                "prompt": result["prompt"],
-                "chosen": result["chosen"],
-                "rejected": result["rejected"],
-            }
-            dpo_f.write(json.dumps(dpo_pair, ensure_ascii=False) + "\n")
-            dpo_f.flush()
+                case = result.get("case", "B")
+                case_key = f"case_{case.lower()}"
+                stats[case_key] = stats.get(case_key, 0) + 1
 
-            stats["pairs_generated"] += 1
-            score_accum["chosen_score"] += result.get("chosen_score", 0)
-            score_accum["rejected_score"] += result.get("rejected_score", 0)
-            score_accum["chosen_cc"] += float(result.get("chosen_complexity", 0) or 0)
-            score_accum["rejected_cc"] += float(result.get("rejected_complexity", 0) or 0)
-            score_accum["chosen_lint"] += float(result.get("chosen_lint_errors", 0) or 0)
-            score_accum["rejected_lint"] += float(result.get("rejected_lint_errors", 0) or 0)
+                if result.get("discarded"):
+                    stats["pairs_discarded"] += 1
+                else:
+                    dpo_pair = {
+                        "prompt": result["prompt"],
+                        "chosen": result["chosen"],
+                        "rejected": result["rejected"],
+                    }
+                    dpo_f.write(json.dumps(dpo_pair, ensure_ascii=False) + "\n")
+                    dpo_f.flush()
 
-            if stats["pairs_generated"] % 500 == 0:
+                    stats["pairs_generated"] += 1
+                    score_accum["chosen_score"] += result.get("chosen_score", 0)
+                    score_accum["rejected_score"] += result.get("rejected_score", 0)
+                    score_accum["chosen_cc"] += float(result.get("chosen_complexity", 0) or 0)
+                    score_accum["rejected_cc"] += float(result.get("rejected_complexity", 0) or 0)
+                    score_accum["chosen_lint"] += float(result.get("chosen_lint_errors", 0) or 0)
+                    score_accum["rejected_lint"] += float(result.get("rejected_lint_errors", 0) or 0)
+
+            processed_in_session += len(batch)
+            pbar.update(len(batch))
+
+            # Save checkpoint after every batch
+            with open(checkpoint_file, "w") as f:
+                json.dump({"processed": start_idx + processed_in_session}, f)
+
+            # W&B logging every 10 batches (~80 samples)
+            batch_num = batch_start // BATCH_SIZE
+            if batch_num % 10 == 0 and stats["pairs_generated"] > 0:
                 n_so_far = max(stats["pairs_generated"], 1)
                 wandb.log({
                     "pairs_generated": stats["pairs_generated"],
@@ -145,6 +186,13 @@ def main():
                     "avg_rejected_score": round(score_accum["rejected_score"] / n_so_far, 4),
                 })
 
+        pbar.close()
+
+    # Clean up checkpoint on successful completion
+    if checkpoint_file.exists():
+        checkpoint_file.unlink()
+
+    # ── Final summary ────────────────────────────────────────────────
     n = max(stats["pairs_generated"], 1)
     avg_stats = {
         "avg_chosen_score": round(score_accum["chosen_score"] / n, 4),
@@ -178,8 +226,8 @@ def main():
           f" | rejected: {avg_stats['avg_rejected_cc']:.2f}")
     print(f"Avg lint errors — chosen: {avg_stats['avg_chosen_lint_errors']:.2f}"
           f" | rejected: {avg_stats['avg_rejected_lint_errors']:.2f}")
-    print(f"\nDPO dataset: {DPO_DS}")
-    print(f"Full report: {DPO_REPORT}")
+    print(f"\nDPO dataset: {dpo_output_path}")
+    print(f"Full report: {report_output_path}")
 
 if __name__ == "__main__":
     main()

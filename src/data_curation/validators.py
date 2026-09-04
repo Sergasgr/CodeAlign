@@ -104,12 +104,6 @@ def check_code(code: str, language: str):
     lint_errors = metrics["lint_errors"]
     cycl_complexity = metrics["complexity"]
 
-    result = {
-        "is_valid_ast": is_valid_ast,
-        "lint_errors": lint_errors,
-        "cyclomatic_complexity": cycl_complexity        
-    }
-    
     if lint_errors == -1:
         result = rejection("rejected_lint_timeout", "Linter timed out (infra, not a code quality signal)")
     elif lint_errors is not None and lint_errors > MAX_LINT_ERRORS.get(language, MAX_LINT_ERRORS_DEFAULT): 

@@ -1,6 +1,4 @@
-// DEPRECATED??
-
-/*
+// Deprecated
 use axum::{
     http::StatusCode,
     routing::post,
@@ -135,4 +133,4 @@ fn build_command(language: &str, code: &str) -> Result<Vec<String>, String> {
         _ => Err(format!("Unsupported language: {}", language)),
     }
 }
-*/
+

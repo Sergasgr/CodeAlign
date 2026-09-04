@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from src.preference_generation.candidate_generator import CandidateGenerator
 from src.preference_generation.docker_sandbox import DockerSandbox
 from src.data_curation.validators import linter_check
@@ -46,37 +48,19 @@ class PreferenceOrchestrator:
                 "stderr": str(e),
             }
 
-    def create_preference_pair(self, prompt: str, language: str) -> dict:
-        """
-        Case classification:
-            A — one passes, one fails → chosen = passing
-            B — both fail → discarded (noisy gradients)
-            C — both pass → ranked by composite score
-            C_tied — both pass with identical scores → discarded
-        """
-        candidates = self.candidate_generator.generate_candidates(prompt)
-
-        eval_results = []
-        evaluations = {
-            "passing": [],
-            "failing": [],
-        }
-        
-        for idx, candidate in enumerate(candidates):
-            eval_result = self.reward_score(candidate, language)
-            eval_results.append(eval_result)
-            if eval_result["passed"]:
-                evaluations["passing"].append((idx, eval_result["score"]))
+    def _classify_pair(self, prompt: str, language: str, candidates: list[str], evals: list[dict]) -> dict:
+        """Classify a candidate pair into Case A/B/C and return the labeled result."""
+        evaluations = {"passing": [], "failing": []}
+        for j, ev in enumerate(evals):
+            if ev["passed"]:
+                evaluations["passing"].append((j, ev["score"]))
             else:
-                evaluations["failing"].append((idx, eval_result["score"]))
+                evaluations["failing"].append((j, ev["score"]))
 
         # Case B — all fail → discard (prevents noisy gradients)
         if not evaluations["passing"]:
             return {
-                "prompt": prompt,
-                "case": "B",
-                "language": language,
-                "discarded": True,
+                "prompt": prompt, "case": "B", "language": language, "discarded": True,
             }
 
         # Case A — at least one passes and at least one fails
@@ -92,15 +76,12 @@ class PreferenceOrchestrator:
             
             if chosen_idx == rejected_idx:
                 return {
-                    "prompt": prompt,
-                    "case": "C_tied",
-                    "language": language,
-                    "discarded": True,
+                    "prompt": prompt, "case": "C_tied", "language": language, "discarded": True,
                 }
             case = "C"
 
-        chosen_eval = eval_results[chosen_idx]
-        rejected_eval = eval_results[rejected_idx]
+        chosen_eval = evals[chosen_idx]
+        rejected_eval = evals[rejected_idx]
 
         return {
             "prompt": prompt,
@@ -116,3 +97,38 @@ class PreferenceOrchestrator:
             "chosen_lint_errors": chosen_eval["lint_errors"],
             "rejected_lint_errors": rejected_eval["lint_errors"],
         }
+
+    def create_preference_pair(self, prompt: str, language: str) -> dict:
+        """Process a single prompt (legacy single-item path)."""
+        candidates = self.candidate_generator.generate_candidates(prompt)
+        evals = [self.reward_score(c, language) for c in candidates]
+        return self._classify_pair(prompt, language, candidates, evals)
+
+    def create_preference_pairs_batch(self, prompts: list[str], languages: list[str]) -> list[dict]:
+        """Process a batch: batched GPU generation + concurrent sandbox/lint evaluation."""
+        # Step 1 — batched GPU generation (single forward pass for all prompts)
+        all_candidates = self.candidate_generator.generate_candidates_batch(prompts)
+
+        # Step 2 — concurrent sandbox + linting (I/O-bound, safe to thread)
+        eval_results: dict[tuple[int, int], dict] = {}
+        max_workers = min(len(prompts) * 2, 8)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {}
+            for i, (candidates, lang) in enumerate(zip(all_candidates, languages)):
+                for j, candidate in enumerate(candidates):
+                    future = executor.submit(self.reward_score, candidate, lang)
+                    futures[future] = (i, j)
+
+            for future in as_completed(futures):
+                key = futures[future]
+                eval_results[key] = future.result()
+
+        # Step 3 — classify each pair using A/B/C logic
+        results = []
+        for i, (prompt, lang) in enumerate(zip(prompts, languages)):
+            candidates = all_candidates[i]
+            evals = [eval_results[(i, j)] for j in range(len(candidates))]
+            results.append(self._classify_pair(prompt, lang, candidates, evals))
+
+        return results

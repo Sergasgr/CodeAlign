@@ -67,4 +67,6 @@ Solo detecta bloques contiguos. Si la lógica duplicada está repartida con cód
 El comentario que ya tenías sobre el doble conteo de ventanas solapadas sigue siendo válido — es una aproximación, no una métrica de precisión.
 
 Mi recomendación: déjalo así para la Fase 1 (rápido, sin dependencias, cero falsos positivos añadidos), y si el reporte de la Fase 1 muestra que se te está colando duplicación real tipo copy-paste-renombrado, ahí sí merece la pena añadir la normalización de identificadores — como mejora dirigida por evidencia, no especulativa.
-"""
+""" 
+
+# Analizar si se está colando duplicación real 

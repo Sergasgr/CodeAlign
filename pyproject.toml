@@ -5,14 +5,12 @@ description = "Iterative post-training pipeline for coding LLMs — SFT + DPO wi
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "argparse>=1.4.0",
-    "asyncio>=4.0.0",
     "bitsandbytes>=0.50.0",
     "cpplint>=2.0.2",
     "datasets>=5.0.0",
     "datasketch>=2.0.0",
-    "docker>=7.2.0",
     "fastapi>=0.141.1",
+    "evaluate>=0.4.0",
     "gradio>=6.22.0",
     "grpcio>=1.83.0",
     "grpcio-tools>=1.83.0",

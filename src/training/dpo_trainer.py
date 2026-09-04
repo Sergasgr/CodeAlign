@@ -117,22 +117,30 @@ def main():
         seed=SEED,
     )
 
+    os.environ["WANDB_LOG_MODEL"] = "false"
+    
     wandb.init(
         project=wandb_project,
         entity=wandb_entity,
-        name=run_name,
-        tags=tags
+        name=f"{WANDB_RUN_NAME}-{reward_model}",
+        tags=["dpo", reward_model, "qwen2.5-coder"],
+        resume="allow"
     )
 
     trainer = DPOTrainer(
         model=model,
-        train_dataset=dataset,  
-        peft_config=peft_config,
-        processing_class=tokenizer, 
+        ref_model=ref_model,
         args=training_args,
+        train_dataset=dataset,
+        processing_class=tokenizer,
+        peft_config=peft_config,
     )
 
-    trainer.train()
+    import glob
+    checkpoints = glob.glob(f"{output_directory}/checkpoint-*")
+    resume_from_checkpoint = True if checkpoints else False
+
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     final_dir = f"{output_directory}/final_model"
     trainer.save_model(final_dir)

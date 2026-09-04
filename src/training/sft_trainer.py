@@ -91,11 +91,14 @@ def main():
         seed=SEED,
     )
 
+    os.environ["WANDB_LOG_MODEL"] = "false"
+    
     wandb.init(
         project=wandb_project,
         entity=wandb_entity,
         name=WANDB_RUN_NAME,
-        tags=["sft", "pristine-dataset", "qwen2.5-coder"]
+        tags=["sft", "pristine-dataset", "qwen2.5-coder"],
+        resume="allow"
     )
 
     trainer = SFTTrainer(
@@ -106,7 +109,11 @@ def main():
         args=training_args,
     )
 
-    trainer.train()
+    import glob
+    checkpoints = glob.glob(f"{SFT_OUTPUT_DIR}/checkpoint-*")
+    resume_from_checkpoint = True if checkpoints else False
+
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     final_dir = f"{SFT_OUTPUT_DIR}/final_model"
     trainer.save_model(final_dir)

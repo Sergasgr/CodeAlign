@@ -11,7 +11,7 @@ from trl import GRPOConfig, GRPOTrainer
 
 from src.data_curation.curation_config import DS_PATH
 from src.preference_generation.preference_orchestrator import PreferenceOrchestrator
-from src.training.grpo_config import ( # Asumiendo que guardaste el config como grpo_config.py
+from src.training.grpo_config import (
     BASE_SFT_MODEL,
     TOKENIZER_MODEL,
     GRPO_OUTPUT_DIR,
@@ -32,16 +32,6 @@ from src.training.grpo_config import ( # Asumiendo que guardaste el config como 
 )
 
 load_dotenv()
-
-"""
-def composite_reward_func(prompts: list[str], completions: list[str], language: list[str], **kwargs) -> list[float]:
-    scores = []
-    for prompt, completion, lang in zip(prompts, completions, language): 
-        code = completion[0]["content"] if isinstance(completion, list) else completion 1 # Argument of type "Literal['content']" cannot be assigned to parameter "key" of type "SupportsIndex | slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]" in function "__getitem__"
-        eval_result = orchestrator.reward_score(code, lang)
-        scores.append(float(eval_result["score"]))
-    return scores
-"""
 
 def composite_reward_func(prompts: list[str], completions: list[Any], **kwargs) -> list[float]:
     language = kwargs.get("language", [])
@@ -121,16 +111,19 @@ def main():
         gradient_checkpointing=True,            
         optim="paged_adamw_8bit",
         beta=BETA, 
-        dataloader_num_workers=4, #dataset_num_proc=4, No parameter named "dataset_num_proc" PylancereportCallIssue
+        dataloader_num_workers=4,
         use_vllm=False, 
         seed=SEED,
     )
+    
+    os.environ["WANDB_LOG_MODEL"] = "false"
     
     wandb.init(
         project=wandb_project,
         entity=wandb_entity,
         name=WANDB_RUN_NAME,
-        tags=["grpo", "rl", "composite-reward", "qwen2.5-coder"]
+        tags=["grpo", "rl", "composite-reward", "qwen2.5-coder"],
+        resume="allow"
     )
     
     trainer = GRPOTrainer(
@@ -139,9 +132,14 @@ def main():
         args=training_args,
         train_dataset=dataset,
         peft_config=peft_config,
-        reward_funcs=[composite_reward_func], # Argument of type "list[(prompts: list[str], completions: list[str], language: list[str], **kwargs: Unknown) -> list[float]]" cannot be assigned to parameter "reward_funcs" of type "RewardFunc | list[RewardFunc] | None" in function "__init__". Type "(prompts: list[str], completions: list[str], language: list[str], **kwargs: Unknown) -> list[float]" is not assignable to type "RewardFunc"
+        reward_funcs=[composite_reward_func],
     )
-    trainer.train()
+    
+    import glob
+    checkpoints = glob.glob(f"{GRPO_OUTPUT_DIR}/checkpoint-*")
+    resume_from_checkpoint = True if checkpoints else False
+    
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     
     final_dir = f"{GRPO_OUTPUT_DIR}/final_model"
     trainer.save_model(final_dir)

@@ -12,7 +12,7 @@ def merge_and_save():
     base_model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL_ID,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        device_map="cpu", # To avoid CUDA out of memory due to 16 GB VRAM limitation
     )
 
     print(f"2. Attaching SFT adapter from {SFT_ADAPTER_DIR}...")
