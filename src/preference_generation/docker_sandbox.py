@@ -1,5 +1,11 @@
 import grpc
+import sys
+from pathlib import Path
 from src.preference_generation.preference_generation_config import EXECUTION_TIMEOUT
+
+current_dir = Path(__file__).parent
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
 
 import src.preference_generation.executor_pb2 as executor_pb2
 import src.preference_generation.executor_pb2_grpc as executor_pb2_grpc

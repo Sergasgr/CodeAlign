@@ -1,6 +1,6 @@
 from src.data_curation.curation_config import BASE_DIR
 
-# DPO MODELS
+# GRPO MODELS
 BASE_SFT_MODEL = str(BASE_DIR / "checkpoints" / "sft" / "merged_model")
 TOKENIZER_MODEL = BASE_SFT_MODEL
 

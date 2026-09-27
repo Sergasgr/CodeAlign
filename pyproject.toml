@@ -1,7 +1,7 @@
 [project]
 name = "codealign"
-version = "0.1.0"
-description = "Iterative post-training pipeline for coding LLMs — SFT + DPO with composite (execution + static analysis) reward signal"
+version = "1.0.0"
+description = "Post-training pipeline for coding LLMs — SFT + DPO with a composite (execution + static analysis) reward signal"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -46,9 +46,17 @@ speed = [
 
 [dependency-groups]
 dev = [
+    # Evaluation harness, pinned to the commit scripts/setup_eval_harness.sh clones and patches.
+    "bigcode-eval @ git+https://github.com/bigcode-project/bigcode-evaluation-harness@8fc5bae6479c4fbbb28c3f8b644f6a15b3f3b5bd",
     "jupyter>=1.1.1",
     "matplotlib>=3.8.0",
     "pandas>=2.2.0",
     "pytest>=9.1.1",
     "seaborn>=0.13.0",
 ]
+
+[tool.uv]
+# filelock >= 3.30 installs an audit hook that raises "os.fork is unsafe while filelock is changing
+# descriptor ownership" when several threads fork at once, which is exactly how the evaluation
+# harness runs the HumanEval tests (16 threads, one subprocess each).
+constraint-dependencies = ["filelock<3.30"]

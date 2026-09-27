@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from src.data_curation.validators import linter_check
+from src.data_curation.validators import linter_check, validate_syntax
 from src.evaluation.evaluation_config import (
     DPO_ABLATION_GENERATIONS,
     DPO_COMPOSITE_GENERATIONS,
@@ -10,6 +10,10 @@ from src.evaluation.evaluation_config import (
     TARGET_SAMPLES,
     COMPLEXITY_GAP,
 )
+
+def has_syntax_error(code: str, lang: str) -> bool:
+    is_valid, error = validate_syntax(code, lang)
+    return not is_valid and error == "Syntax error detected by tree-sitter"
 
 def extract_qualitative_samples(lang: str) -> None:
     ablation_file = DPO_ABLATION_GENERATIONS.format(lang=lang)
@@ -31,16 +35,17 @@ def extract_qualitative_samples(lang: str) -> None:
 
     with open(output_md, "w", encoding="utf-8") as out:
         out.write(f"# Qualitative Samples ({lang}): Ablation DPO vs. Composite Reward DPO\n\n")
-        out.write("Problems where both models produce working code, but the composite-reward\n")
-        out.write("model generates simpler, cleaner code (lower cyclomatic complexity).\n\n")
+        out.write("Problems where the composite-reward model's code has a cyclomatic complexity at least\n")
+        out.write(f"{COMPLEXITY_GAP} lower than the execution-only model's; both are syntactically valid.\n")
+        out.write("Selected by complexity gap for illustration. Correctness is not checked here (see pass@1).\n\n")
         out.write("---\n\n")
 
-        for idx, (abl_samples, comp_samples) in enumerate(
-            zip(ablation_gens, composite_gens)
-        ):
+        for idx, (abl_samples, comp_samples) in enumerate(zip(ablation_gens, composite_gens)):
             code_abl = abl_samples[0]
             code_comp = comp_samples[0]
-       
+            if has_syntax_error(code_abl, lang) or has_syntax_error(code_comp, lang):
+                continue
+
             metrics_abl = linter_check(code_abl, lang)
             metrics_comp = linter_check(code_comp, lang)
 
@@ -54,7 +59,8 @@ def extract_qualitative_samples(lang: str) -> None:
 
             if cc_abl - cc_comp >= COMPLEXITY_GAP: # type: ignore
                 found += 1
-                out.write(f"### MultiPL-E #{idx} ({lang})\n\n")
+                problem = f"HumanEval/{idx}" if lang == "python" else f"MultiPL-E {lang} #{idx}"
+                out.write(f"### {problem}\n\n")
                 out.write(f"| Metric | Ablation (exec-only) | Composite |\n")
                 out.write(f"|--------|---------------------|-----------|\n")
                 out.write(f"| Cyclomatic complexity | {cc_abl} | {cc_comp} |\n")

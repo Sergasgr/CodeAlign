@@ -22,11 +22,7 @@ IGNORED_LINES = {
 }
 CATCH_PATTERN = re.compile(r"^catch\s*\(.*\)\s*\{?$", re.IGNORECASE)
 
-def check_internal_duplication( 
-    code: str,
-    window_size: int = 12,
-    density_threshold: float = 0.2,
-) -> tuple[bool, str]:
+def check_internal_duplication(code: str, window_size: int = 12, density_threshold: float = 0.2) -> tuple[bool, str]:
     meaningful_lines = []
     for line in code.split("\n"):
         stripped = line.strip()
@@ -56,17 +52,3 @@ def check_internal_duplication(
             f"repeated {window_size}+ line blocks"
         )
     return False, ""
-
-"""
-¿Es realmente una buena forma de prevenir code smells y DRY?
-
-Honestamente: es una barrera rápida y razonable para v1, pero no un detector de clones de verdad — y vale la pena que sepas exactamente dónde está el límite en vez de sobrevenderlo:
-
-Solo detecta copias exactas (Type-1). Un bloque copiado y pegado con una sola variable renombrada ya no hace match — y copy-paste-y-renombrar es, en la práctica, el patrón de duplicación más común, más que la copia byte a byte. Detectar eso necesitaría normalizar identificadores antes de comparar (una pasada "ciega a nombres de variable"), que esto no hace.
-Solo detecta bloques contiguos. Si la lógica duplicada está repartida con código distinto en medio, no la pilla.
-El comentario que ya tenías sobre el doble conteo de ventanas solapadas sigue siendo válido — es una aproximación, no una métrica de precisión.
-
-Mi recomendación: déjalo así para la Fase 1 (rápido, sin dependencias, cero falsos positivos añadidos), y si el reporte de la Fase 1 muestra que se te está colando duplicación real tipo copy-paste-renombrado, ahí sí merece la pena añadir la normalización de identificadores — como mejora dirigida por evidencia, no especulativa.
-""" 
-
-# Analizar si se está colando duplicación real 

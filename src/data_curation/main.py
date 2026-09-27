@@ -66,10 +66,9 @@ def main():
          open(REPORT_PATH, 'w', encoding='utf-8') as rp, \
          concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             
-            futures = [executor.submit(process_sample_heavy, sample) for sample in ds]
-            
-            for i, future in enumerate(concurrent.futures.as_completed(futures), start=1):
-                sample, prompt, prompt_type, language, code_data = future.result()
+            results = executor.map(process_sample_heavy, ds)
+
+            for i, (sample, prompt, prompt_type, language, code_data) in enumerate(results, start=1):
                 processed_lang_counts[language] = processed_lang_counts.get(language, 0) + 1
                 
                 if code_data["flag"]:
@@ -131,7 +130,6 @@ def main():
     for lang, n in sorted(language_count.items(), key=lambda kv: -kv[1]):
         print(f"{LANGUAGE_LOGS[lang]}: {n}")
     
-    # Per-language rejection breakdown (essential for tuning linter configs)
     print("\nRejection breakdown by language:")
     for lang_key in sorted(rejection_by_lang.keys()):
         lang_rej = rejection_by_lang[lang_key]

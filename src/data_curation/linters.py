@@ -24,7 +24,7 @@ def ruff_check(code: str) -> int:
         tmp.flush()
         try:
             result = subprocess.run(
-                ["ruff", "check", "--select=F,E9", "--output-format=concise", tmp.name], 
+                ["ruff", "check", "--quiet", "--select=F,E9", "--output-format=concise", tmp.name], 
                 capture_output=True, 
                 text=True,
                 timeout=RUFF_TIMEOUT_SECONDS
@@ -52,7 +52,7 @@ def cpplint_check(code: str) -> int:
         except subprocess.TimeoutExpired:
             return -1
 
-    for line in reversed(result.stderr.splitlines()):
+    for line in reversed((result.stdout + "\n" + result.stderr).splitlines()):
         if "Total errors found:" in line:
             try:
                 return int(line.split(":")[-1].strip())

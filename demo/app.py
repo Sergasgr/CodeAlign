@@ -3,7 +3,7 @@ import gradio as gr
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from src.data_curation.validators import linter_check
+from src.data_curation.validators import linter_check, parse_code
 
 from demo.demo_config import (
     BASE_MODEL,
@@ -16,12 +16,6 @@ from demo.demo_config import (
     REPETITION_PENALTY,
     SERVER_PORT,
 )
-
-"""
-# model.disable_adapters()
-# model.set_adapter("sft")
-# model.set_adapter("dpo")
-"""
 
 print("Loading tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
@@ -94,7 +88,7 @@ def generate(model, prompt: str) -> str:
     return tokenizer.decode(new_tokens, skip_special_tokens=True)
 
 def format_metrics(code: str, language: str = "python") -> str:
-    result = linter_check(code, language)
+    result = linter_check(parse_code(code), language)
     cc = result.get("complexity")
     lint = result.get("lint_errors")
     cc_display = cc if cc is not None else "N/A (Syntax Error)"

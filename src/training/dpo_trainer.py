@@ -2,6 +2,7 @@ import os
 import torch
 import wandb 
 import argparse
+import glob
 from dotenv import load_dotenv
 from datasets import load_dataset
 from peft import LoraConfig
@@ -45,9 +46,10 @@ def main():
     parser.add_argument(
         "--reward_mode", 
         type=str, 
-        choices=["composite", "execution_only"], 
+        choices=["composite", "execution_only", "composite_matched"], 
         default="composite",
-        help="Choose which preference dataset to use for the ablation study."
+        help="Choose which preference dataset to use for the ablation study. composite_matched = composite "
+             "pairs subsampled to the execution-only pair count (scripts/make_size_matched_pairs.py)."
     )
     args = parser.parse_args()
     
@@ -55,16 +57,31 @@ def main():
         dataset_path = DPO_DS.replace(".jsonl", "_exec_only.jsonl") 
         run_name = f"{WANDB_RUN_NAME}-ablation-exec-only"
         tags = ["dpo", "preference-dataset", "execution-only", "qwen2.5-coder"]
+    elif args.reward_mode == "composite_matched":
+        dataset_path = DPO_DS.replace(".jsonl", "_composite_matched.jsonl")
+        run_name = f"{WANDB_RUN_NAME}-composite-size-matched"
+        tags = ["dpo", "preference-dataset", "composite-reward", "size-matched", "qwen2.5-coder"]
     else:
         dataset_path = DPO_DS
         run_name = f"{WANDB_RUN_NAME}-composite"
         tags = ["dpo", "preference-dataset", "composite-reward", "qwen2.5-coder"]
         
-    dataset = load_dataset(
+    dataset_raw = load_dataset(
         "json",
         data_files=dataset_path, 
         split="train"
     ) 
+
+    def format_to_conversational(example):
+        return {
+            "prompt": [{"role": "user", "content": example["prompt"]}],
+            "chosen": [{"role": "assistant", "content": example["chosen"]}],
+            "rejected": [{"role": "assistant", "content": example["rejected"]}]
+        }
+
+    dataset = dataset_raw.filter(
+        lambda x: bool(x["chosen"].strip()) and bool(x["rejected"].strip())
+    ).map(format_to_conversational)
 
     tokenizer = AutoTokenizer.from_pretrained(
         TOKENIZER_MODEL,        
@@ -95,7 +112,11 @@ def main():
         task_type="CAUSAL_LM"
     )
 
-    output_directory = str(DPO_OUTPUT_DIR) if args.reward_mode == "composite" else str(BASE_DIR / "checkpoints" / "dpo_ablation")
+    output_directory = {
+        "composite": str(DPO_OUTPUT_DIR),
+        "execution_only": str(BASE_DIR / "checkpoints" / "dpo_ablation"),
+        "composite_matched": str(BASE_DIR / "checkpoints" / "dpo_composite_matched"),
+    }[args.reward_mode]
 
     training_args = DPOConfig( 
         output_dir=output_directory, 
@@ -107,7 +128,7 @@ def main():
         gradient_accumulation_steps=GRAD_ACCUMULATION_STEPS,          
         bf16=True,                             
         learning_rate=LEARNING_RATE,                  
-        max_length=MAX_SEQ_LENGTH,                  
+        max_length=MAX_SEQ_LENGTH,
         logging_steps=10,                     
         report_to="wandb",                     
         gradient_checkpointing=True,            
@@ -122,21 +143,20 @@ def main():
     wandb.init(
         project=wandb_project,
         entity=wandb_entity,
-        name=f"{WANDB_RUN_NAME}-{reward_model}",
-        tags=["dpo", reward_model, "qwen2.5-coder"],
+        name=f"{WANDB_RUN_NAME}-{args.reward_mode}",
+        tags=["dpo", args.reward_mode, "qwen2.5-coder"],
         resume="allow"
     )
 
     trainer = DPOTrainer(
         model=model,
-        ref_model=ref_model,
+        ref_model=None,
         args=training_args,
         train_dataset=dataset,
         processing_class=tokenizer,
         peft_config=peft_config,
     )
 
-    import glob
     checkpoints = glob.glob(f"{output_directory}/checkpoint-*")
     resume_from_checkpoint = True if checkpoints else False
 

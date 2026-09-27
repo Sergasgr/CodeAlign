@@ -11,11 +11,14 @@ BASE_GENERATIONS = str(EVAL_DIR / "base_generations_{lang}.json")
 SFT_GENERATIONS = str(EVAL_DIR / "sft_generations_{lang}.json")
 DPO_COMPOSITE_GENERATIONS = str(EVAL_DIR / "dpo_composite_generations_{lang}.json")
 DPO_ABLATION_GENERATIONS = str(EVAL_DIR / "dpo_ablation_generations_{lang}.json")
+DPO_COMPOSITE_MATCHED_GENERATIONS = str(EVAL_DIR / "dpo_composite_matched_generations_{lang}.json")
 
 BASE_METRICS = str(EVAL_DIR / "base_metrics_{lang}.json")
 SFT_METRICS = str(EVAL_DIR / "sft_metrics_{lang}.json")
 DPO_COMPOSITE_METRICS = str(EVAL_DIR / "dpo_composite_metrics_{lang}.json")
 DPO_ABLATION_METRICS = str(EVAL_DIR / "dpo_ablation_metrics_{lang}.json")
+
+DPO_COMPOSITE_MATCHED_METRICS = str(EVAL_DIR / "dpo_composite_matched_metrics_{lang}.json")
 
 STATIC_ANALYSIS_RESULTS = str(EVAL_DIR / "static_analysis_results_{lang}.jsonl")
 

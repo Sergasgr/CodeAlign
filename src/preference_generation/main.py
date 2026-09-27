@@ -75,7 +75,6 @@ def main():
 
     print(f"Loaded {len(all_data)} prompts from {DS_PATH}")
 
-    # ── Checkpoint / Resume ──────────────────────────────────────────
     checkpoint_dir = Path(dpo_output_path).parent
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_file = checkpoint_dir / f".checkpoint_{args.reward_mode}.json"
@@ -97,7 +96,6 @@ def main():
 
     remaining_data = all_data[start_idx:]
 
-    # ── Init model + sandbox ─────────────────────────────────────────
     print("Initializing SFT model and Docker sandbox...")
     orchestrator = PreferenceOrchestrator(
         w_exec=w_exec, 
@@ -106,9 +104,10 @@ def main():
     )
 
     stats = {
-        "total_prompts": len(all_data),
+        "total_prompts": 0,
         "case_a": 0,
         "case_b": 0,
+        "case_b_tied": 0,
         "case_c": 0,
         "case_c_tied": 0,
         "pairs_generated": 0,
@@ -123,7 +122,6 @@ def main():
         "rejected_lint": 0.0,
     }
 
-    # ── Batched generation loop ──────────────────────────────────────
     processed_in_session = 0
 
     with open(dpo_output_path, file_mode, encoding="utf-8") as dpo_f, \
@@ -141,6 +139,8 @@ def main():
             for result in results:
                 report_f.write(json.dumps(result, ensure_ascii=False) + "\n")
                 report_f.flush()
+
+                stats["total_prompts"] += 1
 
                 case = result.get("case", "B")
                 case_key = f"case_{case.lower()}"
@@ -168,11 +168,9 @@ def main():
             processed_in_session += len(batch)
             pbar.update(len(batch))
 
-            # Save checkpoint after every batch
             with open(checkpoint_file, "w") as f:
                 json.dump({"processed": start_idx + processed_in_session}, f)
 
-            # W&B logging every 10 batches (~80 samples)
             batch_num = batch_start // BATCH_SIZE
             if batch_num % 10 == 0 and stats["pairs_generated"] > 0:
                 n_so_far = max(stats["pairs_generated"], 1)
@@ -188,11 +186,9 @@ def main():
 
         pbar.close()
 
-    # Clean up checkpoint on successful completion
     if checkpoint_file.exists():
         checkpoint_file.unlink()
 
-    # ── Final summary ────────────────────────────────────────────────
     n = max(stats["pairs_generated"], 1)
     avg_stats = {
         "avg_chosen_score": round(score_accum["chosen_score"] / n, 4),
@@ -215,11 +211,13 @@ def main():
     print(f"Pairs generated:        {stats['pairs_generated']}")
     print(f"Pairs discarded:        {stats['pairs_discarded']}")
     print(f"\nCase breakdown:")
-    print(f"  Case A (one pass, one fail): {stats['case_a']}")
-    print(f"  Case B (both fail):          {stats['case_b']}")
-    print(f"  Case C (both pass, ranked):  {stats['case_c']}")
+    print(f"  Case A (one pass, one fail):           {stats['case_a']}")
+    print(f"  Case B (both fail, ranked by quality): {stats['case_b']}")
+    if stats.get("case_b_tied"):
+        print(f"  Case B tied (discarded):               {stats['case_b_tied']}")
+    print(f"  Case C (both pass, ranked):            {stats['case_c']}")
     if stats.get("case_c_tied"):
-        print(f"  Case C tied (discarded):     {stats['case_c_tied']}")
+        print(f"  Case C tied (discarded):               {stats['case_c_tied']}")
     print(f"\nAvg composite score — chosen: {avg_stats['avg_chosen_score']:.4f}"
           f" | rejected: {avg_stats['avg_rejected_score']:.4f}")
     print(f"Avg cyclomatic complexity — chosen: {avg_stats['avg_chosen_cc']:.2f}"

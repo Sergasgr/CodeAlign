@@ -1,0 +1,58 @@
+diff --git a/main.py b/main.py
+index 5d03090..b22db9e 100644
+--- a/main.py
++++ b/main.py
+@@ -268,15 +268,26 @@ def main():
+             "trust_remote_code": args.trust_remote_code,
+             "token": args.use_auth_token,
+         }
+-        if args.load_in_8bit:
+-            print("Loading model in 8bit")
+-            model_kwargs["load_in_8bit"] = args.load_in_8bit
+-            model_kwargs["device_map"] = {"": accelerator.process_index}
+-        elif args.load_in_4bit:
+-            print("Loading model in 4bit")
+-            model_kwargs["load_in_4bit"] = args.load_in_4bit
+-            model_kwargs["torch_dtype"] = torch.float16
+-            model_kwargs["bnb_4bit_compute_dtype"] = torch.float16            
++        if args.load_in_8bit or args.load_in_4bit:
++            # transformers>=5 removed the load_in_4bit/load_in_8bit kwargs of from_pretrained
++            # (TypeError: Qwen2ForCausalLM.__init__() got an unexpected keyword argument 'load_in_4bit').
++            # A BitsAndBytesConfig + `dtype` (transformers >= 4.56) replaces them. The 4-bit settings mirror the
++            # QLoRA training setup (NF4 + double quant, compute dtype = --precision) instead of the
++            # upstream default (FP4 + fp16 compute, silently ignoring --precision).
++            from transformers import BitsAndBytesConfig
++
++            if args.load_in_8bit:
++                print("Loading model in 8bit")
++                model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
++            else:
++                print(f"Loading model in 4bit (NF4, double quant, compute dtype {args.precision})")
++                model_kwargs["quantization_config"] = BitsAndBytesConfig(
++                    load_in_4bit=True,
++                    bnb_4bit_quant_type="nf4",
++                    bnb_4bit_use_double_quant=True,
++                    bnb_4bit_compute_dtype=dict_precisions[args.precision],
++                )
++            model_kwargs["dtype"] = dict_precisions[args.precision]
+             model_kwargs["device_map"] = {"": accelerator.process_index}
+         else:
+             print(f"Loading model in {args.precision}")
+@@ -314,9 +325,14 @@ def main():
+             from peft import PeftModel  # dynamic import to avoid dependency on peft
+ 
+             model = PeftModel.from_pretrained(model, args.peft_model)
+-            print("Loaded PEFT model. Merging...")
+-            model.merge_and_unload()
+-            print("Merge complete.")
++            if args.load_in_4bit or args.load_in_8bit:
++                # Merging into a quantized base dequantizes + requantizes the weights (rounding error).
++                # Keeping the adapter unmerged is exactly the computation seen during QLoRA training.
++                print("Loaded PEFT adapter on a quantized base; keeping it unmerged.")
++            else:
++                print("Loaded PEFT model. Merging...")
++                model = model.merge_and_unload()
++                print("Merge complete.")
+ 
+         if args.left_padding:
+             # left padding is required for some models like chatglm3-6b

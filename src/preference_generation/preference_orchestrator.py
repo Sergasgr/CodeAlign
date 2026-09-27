@@ -38,6 +38,8 @@ class PreferenceOrchestrator:
                 "stdout": execution.get("stdout", ""),
                 "stderr": execution.get("stderr", ""),
             }
+        except FileNotFoundError:
+            raise
         except Exception as e:
             return {
                 "score": -999.0,
@@ -48,41 +50,9 @@ class PreferenceOrchestrator:
                 "stderr": str(e),
             }
 
-    def _classify_pair(self, prompt: str, language: str, candidates: list[str], evals: list[dict]) -> dict:
-        """Classify a candidate pair into Case A/B/C and return the labeled result."""
-        evaluations = {"passing": [], "failing": []}
-        for j, ev in enumerate(evals):
-            if ev["passed"]:
-                evaluations["passing"].append((j, ev["score"]))
-            else:
-                evaluations["failing"].append((j, ev["score"]))
-
-        # Case B — all fail → discard (prevents noisy gradients)
-        if not evaluations["passing"]:
-            return {
-                "prompt": prompt, "case": "B", "language": language, "discarded": True,
-            }
-
-        # Case A — at least one passes and at least one fails
-        if evaluations["passing"] and evaluations["failing"]:
-            case = "A"
-            chosen_idx = max(evaluations["passing"], key=lambda x: x[1])[0]
-            rejected_idx = min(evaluations["failing"], key=lambda x: x[1])[0]
-
-        # Case C — all pass → rank by composite quality metric
-        else:
-            chosen_idx = max(evaluations["passing"], key=lambda x: x[1])[0]
-            rejected_idx = min(evaluations["passing"], key=lambda x: x[1])[0]
-            
-            if chosen_idx == rejected_idx:
-                return {
-                    "prompt": prompt, "case": "C_tied", "language": language, "discarded": True,
-                }
-            case = "C"
-
+    def _build_result(self, prompt, language, candidates, evals, chosen_idx, rejected_idx, case):
         chosen_eval = evals[chosen_idx]
         rejected_eval = evals[rejected_idx]
-
         return {
             "prompt": prompt,
             "chosen": candidates[chosen_idx],
@@ -98,18 +68,57 @@ class PreferenceOrchestrator:
             "rejected_lint_errors": rejected_eval["lint_errors"],
         }
 
+    def _build_discard(self, prompt, language, candidates, evals, case):
+        result = {
+            "prompt": prompt, "case": case, "language": language, "discarded": True,
+        }
+        for j, (cand, ev) in enumerate(zip(candidates, evals)):
+            result[f"candidate_{j}_code"] = cand[:500]
+            result[f"candidate_{j}_stderr"] = ev.get("stderr", "")[:300]
+            result[f"candidate_{j}_score"] = ev.get("score")
+        return result
+
+    def _classify_pair(self, prompt: str, language: str, candidates: list[str], evals: list[dict]) -> dict:
+        evaluations = {"passing": [], "failing": []}
+        for j, ev in enumerate(evals):
+            if ev["passed"]:
+                evaluations["passing"].append((j, ev["score"]))
+            else:
+                evaluations["failing"].append((j, ev["score"]))
+
+        if not evaluations["passing"]:
+            scores = [(j, ev["score"]) for j, ev in enumerate(evals)]
+            best = max(scores, key=lambda x: x[1])
+            worst = min(scores, key=lambda x: x[1])
+
+            if best[0] == worst[0] or abs(best[1] - worst[1]) < 1e-6:
+                return self._build_discard(prompt, language, candidates, evals, "B_tied")
+
+            return self._build_result(prompt, language, candidates, evals, chosen_idx=best[0], rejected_idx=worst[0], case="B")
+
+        if evaluations["passing"] and evaluations["failing"]:
+            chosen_idx = max(evaluations["passing"], key=lambda x: x[1])[0]
+            rejected_idx = min(evaluations["failing"], key=lambda x: x[1])[0]
+            return self._build_result(prompt, language, candidates, evals,
+                                      chosen_idx, rejected_idx, case="A")
+
+        best = max(evaluations["passing"], key=lambda x: x[1])
+        worst = min(evaluations["passing"], key=lambda x: x[1])
+        chosen_idx, rejected_idx = best[0], worst[0]
+
+        if chosen_idx == rejected_idx or abs(best[1] - worst[1]) < 1e-6:
+            return self._build_discard(prompt, language, candidates, evals, "C_tied")
+
+        return self._build_result(prompt, language, candidates, evals, chosen_idx, rejected_idx, case="C")
+
     def create_preference_pair(self, prompt: str, language: str) -> dict:
-        """Process a single prompt (legacy single-item path)."""
         candidates = self.candidate_generator.generate_candidates(prompt)
         evals = [self.reward_score(c, language) for c in candidates]
         return self._classify_pair(prompt, language, candidates, evals)
 
     def create_preference_pairs_batch(self, prompts: list[str], languages: list[str]) -> list[dict]:
-        """Process a batch: batched GPU generation + concurrent sandbox/lint evaluation."""
-        # Step 1 — batched GPU generation (single forward pass for all prompts)
         all_candidates = self.candidate_generator.generate_candidates_batch(prompts)
 
-        # Step 2 — concurrent sandbox + linting (I/O-bound, safe to thread)
         eval_results: dict[tuple[int, int], dict] = {}
         max_workers = min(len(prompts) * 2, 8)
 
@@ -124,7 +133,6 @@ class PreferenceOrchestrator:
                 key = futures[future]
                 eval_results[key] = future.result()
 
-        # Step 3 — classify each pair using A/B/C logic
         results = []
         for i, (prompt, lang) in enumerate(zip(prompts, languages)):
             candidates = all_candidates[i]

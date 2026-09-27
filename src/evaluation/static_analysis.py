@@ -2,12 +2,13 @@ import argparse
 import json
 from pathlib import Path
 
-from src.data_curation.validators import linter_check
+from src.data_curation.validators import linter_check, validate_syntax
 from src.evaluation.evaluation_config import (
     BASE_GENERATIONS,
     SFT_GENERATIONS,
     DPO_COMPOSITE_GENERATIONS,
     DPO_ABLATION_GENERATIONS,
+    DPO_COMPOSITE_MATCHED_GENERATIONS,
     STATIC_ANALYSIS_RESULTS,
 )
 
@@ -17,6 +18,7 @@ def get_models_dict(lang: str) -> dict[str, str]:
         "sft": SFT_GENERATIONS.format(lang=lang),
         "dpo_composite": DPO_COMPOSITE_GENERATIONS.format(lang=lang),
         "dpo_ablation": DPO_ABLATION_GENERATIONS.format(lang=lang),
+        "dpo_composite_matched": DPO_COMPOSITE_MATCHED_GENERATIONS.format(lang=lang),
     }
 
 def analyze_generations(models: dict[str, str], output_path: str, lang: str) -> None:
@@ -34,7 +36,11 @@ def analyze_generations(models: dict[str, str], output_path: str, lang: str) -> 
 
             for problem_idx, samples in enumerate(generations):
                 for sample_idx, code_str in enumerate(samples):
-                    result = linter_check(code_str, lang)
+                    is_valid, error = validate_syntax(code_str, lang)
+                    if not is_valid and error == "Syntax error detected by tree-sitter":
+                        result = {"complexity": None, "lint_errors": None}
+                    else:
+                        result = linter_check(code_str, lang)
                     record = {
                         "model": model_name,
                         "problem_idx": problem_idx,

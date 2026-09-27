@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Phase 2 — SFT (QLoRA) training + adapter merge
 # Requires: Phase 1 completed (data/curated/pristine_dataset.jsonl must exist)
-# GPU required: 1x 24GB VRAM (RTX 3090/4090 or equivalent)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

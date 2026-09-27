@@ -1,0 +1,39 @@
+diff --git a/bigcode_eval/tasks/humaneval.py b/bigcode_eval/tasks/humaneval.py
+index 0676ef3..2420fe4 100644
+--- a/bigcode_eval/tasks/humaneval.py
++++ b/bigcode_eval/tasks/humaneval.py
+@@ -45,7 +45,7 @@ class GeneralHumanEval(Task):
+     answers, generation settings and evaluation methods.
+     """
+ 
+-    DATASET_PATH = "openai_humaneval"
++    DATASET_PATH = "openai/openai_humaneval"
+ 
+     def __init__(self, strip_prompt, k=[1, 10, 100], num_workers=16, timeout=3.0):
+         super().__init__(
+diff --git a/bigcode_eval/tasks/instruct_wizard_humaneval.py b/bigcode_eval/tasks/instruct_wizard_humaneval.py
+index 8579b26..24d38c6 100644
+--- a/bigcode_eval/tasks/instruct_wizard_humaneval.py
++++ b/bigcode_eval/tasks/instruct_wizard_humaneval.py
+@@ -42,7 +42,7 @@ class HumanEvalWizardCoder(Task):
+     answers, generation settings and evaluation methods.
+     """
+ 
+-    DATASET_PATH = "openai_humaneval"
++    DATASET_PATH = "openai/openai_humaneval"
+ 
+     def __init__(self):
+ 
+diff --git a/bigcode_eval/tasks/mbpp.py b/bigcode_eval/tasks/mbpp.py
+index ccaf1b5..f12b4fb 100644
+--- a/bigcode_eval/tasks/mbpp.py
++++ b/bigcode_eval/tasks/mbpp.py
+@@ -28,7 +28,7 @@ class MBPP(Task):
+     answers, generation settings and evaluation methods.
+     """
+ 
+-    DATASET_PATH = "mbpp"
++    DATASET_PATH = "google-research-datasets/mbpp"
+ 
+     def __init__(self):
+         super().__init__(

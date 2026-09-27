@@ -1,0 +1,31 @@
+diff --git a/bigcode_eval/arguments.py b/bigcode_eval/arguments.py
+index 4c0c392..908f8ae 100644
+--- a/bigcode_eval/arguments.py
++++ b/bigcode_eval/arguments.py
+@@ -26,6 +26,14 @@ class EvalArguments:
+     top_p: Optional[float] = field(
+         default=0.95, metadata={"help": "Top-p parameter used for nucleus sampling."}
+     )
++    repetition_penalty: Optional[float] = field(
++        default=1.0,
++        metadata={
++            "help": "Repetition penalty passed to generate(). Always set explicitly: otherwise generate() "
++            "falls back to the model's generation_config.json, and a penalty shipped there silently "
++            "applies to greedy decoding too."
++        },
++    )
+     n_samples: Optional[int] = field(
+         default=1,
+         metadata={"help": "Number of completions to generate for each sample."},
+diff --git a/bigcode_eval/generation.py b/bigcode_eval/generation.py
+index 98e15a7..b709f50 100644
+--- a/bigcode_eval/generation.py
++++ b/bigcode_eval/generation.py
+@@ -70,6 +70,7 @@ def parallel_generations(
+         "temperature": args.temperature,
+         "top_p": args.top_p,
+         "top_k": args.top_k,
++        "repetition_penalty": args.repetition_penalty,
+         "max_length": args.max_length_generation,
+     }
+     stopping_criteria = []
