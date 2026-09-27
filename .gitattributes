@@ -1,0 +1,9 @@
+# Language bar: count the code, not notebook JSON. The report notebooks keep their outputs on
+# purpose (the charts are the evidence a reviewer reads on GitHub), and those outputs are base64
+# PNGs that would otherwise dominate the byte count. Same effect as `linguist-detectable=false`.
+*.ipynb -linguist-detectable
+
+# Generated files: excluded from language stats and collapsed in diffs/PRs.
+src/preference_generation/executor_pb2.py linguist-generated
+src/preference_generation/executor_pb2_grpc.py linguist-generated
+uv.lock linguist-generated
