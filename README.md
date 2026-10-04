@@ -4,6 +4,8 @@ Post-training pipeline for a coding LLM (SFT → DPO) whose preference pairs are
 
 **Base model:** `Qwen2.5-Coder-7B-Instruct` · **Data:** CommitPackFT, 8 languages · **Training:** QLoRA SFT + DPO (TRL, PEFT) on one consumer GPU · **Sandbox:** Docker via a Rust gRPC daemon · **Evaluation:** HumanEval pass@1 + cyclomatic complexity + lint
 
+**Releases:** [v1.0](https://github.com/Sergasgr/CodeAlign/releases/tag/v1.0), the full pipeline run once ([results](#results-v10)) · [v1.1](https://github.com/Sergasgr/CodeAlign/releases/tag/v1.1), DPO re-trained with other learning rates and epoch counts to find what caused v1.0's results ([results](#results-v11)) · next: [ROADMAP.md](ROADMAP.md)
+
 ## Project context
 
 CodeAlign is a practical demonstration of the JetBrains internship *Post-Training Coding LLMs with Frontier Alignment Methods*. Built to bridge my initial lack of hands-on experience, it is a complete, end-to-end post-training pipeline. The project is specifically tailored to the JetBrains ecosystem: it supports eight programming languages that mirror their IDE lineup, and it utilizes reward signals that an IDE already naturally computes, such as execution success, code complexity, and linter feedback.
@@ -59,15 +61,45 @@ How to read these numbers:
 
 1. **The evaluation reproduces the published baseline.** The base model scores 90.2%, against 88.4% in the [Qwen2.5-Coder technical report](https://arxiv.org/abs/2409.12186). Two earlier evaluation protocols gave 17.1% and 68.9% for the same model, for reasons unrelated to it ([Protocol](#protocol)).
 2. **SFT on curated CommitPackFT cost 19.5 points of pass@1** (intervals separate), with no detectable change in CC or lint. The base model has already been through large-scale post-training, and 85% of the SFT prompts are in-context edits of existing files rather than write-from-spec problems like HumanEval's.
-3. **Every DPO run lost further ground against SFT, the execution-only one included** (−17.7 points). DPO reused SFT's `lr=2e-4` for 3 epochs, 200× the default of TRL's `DPOConfig` (1e-6), and reward accuracy reached 1.00 in both logged runs (notebook 04).
+3. **Every DPO run lost further ground against SFT, the execution-only one included** (−17.7 points). DPO reused SFT's `lr=2e-4` for 3 epochs, 200× the default of TRL's `DPOConfig` (1e-6), and reward accuracy reached 1.00 in both logged runs (notebook 04). *v1.1 traced the drop to the three epochs: one epoch at the same learning rate scores 74.4% ([Results (v1.1)](#results-v11)).*
 4. **At a fixed data budget, the composite reward lowered complexity with no detectable pass@1 difference.** The size-matched composite run and the execution-only run trained on the same number of pairs for the same 615 optimizer steps. Their mean CC differs by −1.25 [95% CI −1.65, −0.87]; their pass@1 by −7.9 points, with overlapping intervals.
 5. **With all 30,628 pairs, the composite run lost another 20.7 points** against its size-matched version (intervals separate), and its mean CC fell to 1.42. 80% of those pairs are Case B: two failing candidates ranked by CC and lint alone. Most of the extra signal therefore rewards lower complexity and fewer lint findings whether or not the code works; the qualitative samples in notebook 05 include `return (n - 1) // 2` for "largest divisor of n".
-6. **Both rewards can be satisfied without solving anything.** `R_exec` means "runs without errors". For 23 problems the execution-only model, and for 16 the full composite model, wrote the whole function commented out, which always runs. 11 and 14 more solutions define a differently named function or only an import. The likely mechanism is Case A: an edit that imports project modules fails in the sandbox, while a commented-out candidate runs and becomes "chosen". That has not been measured in the preference data yet.
+6. **Both rewards can be satisfied without solving anything.** `R_exec` means "runs without errors". For 23 problems the execution-only model, and for 16 the full composite model, wrote the whole function commented out, which always runs. 11 and 14 more solutions define a differently named function or only an import. The likely mechanism is Case A: an edit that imports project modules fails in the sandbox, while a commented-out candidate runs and becomes "chosen". *v1.1 measured it: the bias is in the pairs but small (3.0% of chosen vs. 1.3% of rejected Case A candidates), and the three-epoch recipe amplified it ([v1.1 finding 5](#what-v11-found)).*
 7. **v1.0's data do not support the "spaghetti code" hypothesis.** Execution-only DPO did not raise complexity (CC 3.28, against 3.54 for SFT). In the Case A pairs, where execution alone picks the winner, the executing candidate was the more complex one in 26% of pairs and the less complex one in 30% (median ΔCC 0).
 
-In short, v1.0 does not show a composite reward producing better code. It shows that offline rewards built on "runs without errors" can be gamed, that the composite terms reduce complexity at a fixed budget without a measurable correctness change, and that this DPO recipe degrades a strong instruct model. v2 is designed around these results ([Roadmap](#roadmap-v2)).
+In short, v1.0 does not show a composite reward producing better code. It shows that offline rewards built on "runs without errors" can be gamed, that the composite terms reduce complexity at a fixed budget without a measurable correctness change, and that this DPO recipe degrades a strong instruct model (v1.1: because it trained for three epochs at `lr=2e-4`). v2 is designed around these results ([Roadmap](#roadmap-v2)).
 
 The full per-phase evidence lives in the report notebooks (see [below](#report-notebooks)).
+
+## Results (v1.1)
+
+v1.1 asks whether v1.0's DPO results came from the training recipe. It re-trains only DPO, on v1.0's preference pairs, and changes only the learning rate and the number of epochs. β, LoRA, NF4, effective batch 16, seed 42 and the evaluation protocol are v1.0's, and every metrics file passes notebook 06's check against v1.0's evaluation settings.
+
+| DPO run | Pairs | lr × epochs | Optimizer steps | HumanEval pass@1 (95% CI) | Δ vs. SFT, points (McNemar p) | Mean CC | Mean lint errors | No-op solutions² |
+|---|---|---|---|---|---|---|---|---|
+| *SFT (v1.0), reference* | — | — | — | 70.7% [63.4, 77.2] | — | 3.54 | 0.05 | 0 |
+| *Execution-only (v1.0)* | 3,267 | 2e-4 × 3 | 615 | 53.0% [45.4, 60.5] | −17.7 (<0.001) | 3.28 | 2.79¹ | 34 |
+| Execution-only | 3,267 | 2e-4 × 1 | 205 | **74.4%** [67.2, 80.5] | +3.7 (0.44) | 4.09 | 0.19 | 5 |
+| Execution-only | 3,267 | 5e-6 × 3 | 615 | 69.5% [62.1, 76.0] | −1.2 (0.85) | 3.16 | 0.05 | 0 |
+| Execution-only | 3,267 | 5e-6 × 1 | 205 | 68.9% [61.5, 75.5] | −1.8 (0.69) | 3.15 | 0.05 | 0 |
+| Composite, size-matched | 3,267 | 5e-6 × 1 | 205 | 69.5% [62.1, 76.0] | −1.2 (0.84) | 3.14 | 0.05 | 0 |
+| Composite | 30,628 | 5e-6 × 1 | 1,915 | 68.3% [60.8, 74.9] | −2.4 (0.60) | 3.12 | 0.05 | 0 |
+
+² Solutions that are entirely comments or never define the requested function (`report_utils.is_noop`); for the v1.0 run these are finding 6's 23 + 11.
+
+`5e-6 × 1` takes the learning rate and epoch count of the alignment-handbook's DPO QLoRA recipe for Zephyr (which also lowers β to 0.01; v1.1 keeps 0.1). `2e-4 × 1` and `5e-6 × 3` separate the learning rate from the number of epochs.
+
+### What v1.1 found
+
+1. **The v1.0 collapse came from training three epochs at `lr=2e-4`.** On the execution-only pairs, one epoch at that learning rate scores 74.4%, 21.3 points above three epochs (McNemar p < 0.001). At `lr=5e-6`, three epochs and one give the same result (69.5% and 68.9%, p = 1.0). Neither the learning rate nor the epoch count explains the drop on its own; the combination does.
+2. **No v1.1 run is distinguishable from SFT.** All five are inside SFT's interval, with McNemar p between 0.44 and 0.85 against it. The best run, `2e-4 × 1`, is 3.7 points above SFT, a gap 164 problems cannot resolve. Trained without over-optimizing, DPO on these pairs neither costs nor measurably adds correctness; the gap to the base model is SFT's ([finding 2](#what-v10-found)).
+3. **At `lr=5e-6` the policy hardly moves.** 54–60 of each 5e-6 run's 164 solutions are character-for-character identical to SFT's, against 8 for `2e-4 × 1`.
+4. **With a gentle recipe, the reward makes no detectable difference.** At `5e-6 × 1`, size-matched composite vs. execution-only: +0.6 points (p = 1.0) and mean CC −0.01 [95% CI −0.16, +0.10]. Full composite vs. size-matched: −1.2 points (p = 0.79) and CC −0.02 [−0.25, +0.29]. The CC reduction v1.0 measured at a fixed budget ([finding 4](#what-v10-found)) came with the over-optimized recipe and does not appear here. All four 5e-6 runs have a mean CC about 0.4 below SFT's, by the same amount whatever the reward, so that shift is not caused by the composite terms.
+5. **The preference pairs do favour no-op code, but rarely.** In Case A of the execution-only pairs, 3.0% of the chosen candidates are flagged as no-ops (≥ 90% comments, no definitions, or an edit that keeps < 30% of the original file), against 1.3% of the rejected ones: 85 vs. 28 pairs where only one side is flagged (exact McNemar p < 10⁻⁷). Commented-out code alone is chosen 51 times and rejected 6 times. The composite pairs show the same pattern in Case A (3.6% vs. 1.7%) and in Case B, where flagged candidates are chosen 198 times and rejected 65. Over-optimization turns this small bias into behaviour: no-op solutions on HumanEval go from 0 (every 5e-6 run) to 5 (`2e-4 × 1`) to 34 (`2e-4 × 3`, v1.0). The causal test, training without the flagged pairs (`scripts/filter_noop_pairs.py`), was not run.
+
+In short, v1.0's DPO collapse was a recipe problem. Trained for one epoch, DPO on these "runs without errors" pairs stays at SFT's level whichever reward labelled them, so at this scale the pairs carry too little signal to show whether the composite reward produces cleaner code. v2 changes the pairs (checked against tests, no-ops filtered) and chooses the learning rate and epochs per method ([Roadmap](#roadmap-v2)).
+
+The audit, the 2×2, every paired test and the training curves are in `src/notebooks/06_v1.1_dpo_recipe.ipynb`.
 
 ---
 
@@ -171,7 +203,7 @@ The v1.0 curation consumed parallel results in completion order (`as_completed`)
 
 ### Data release
 
-The curated set is published on the Hugging Face Hub as [`<user>/codealign-commitpackft`](https://huggingface.co/datasets/<user>/codealign-commitpackft). It is too large for GitHub: 264 MB against GitHub's 100 MB per-file limit. There are two configs:
+The curated set is published on the Hugging Face Hub as [`Sergasgr/codealign-commitpackft`](https://huggingface.co/datasets/Sergasgr/codealign-commitpackft). It is too large for GitHub: 264 MB against GitHub's 100 MB per-file limit. There are two configs:
 
 | config | rows | contents |
 |---|---|---|
@@ -286,6 +318,8 @@ $y_w$ is the chosen completion and $y_l$ the rejected one. $\pi_\theta$ is the p
   - `checkpoints/dpo/final_model` (composite reward)
   - `checkpoints/dpo_ablation/final_model` (execution-only reward, trained with `--reward_mode execution_only`)
   - `checkpoints/dpo_composite_matched/final_model` (size-matched control, `--reward_mode composite_matched`)
+  - `checkpoints/v1.1/<run_name>/final_model` (v1.1 runs)
+- **v1.1 overrides:** `dpo_trainer.py` takes `--learning_rate`, `--num_train_epochs`, `--dataset` and `--run_name`. Without them it trains exactly as v1.0 did. With `--run_name`, the run writes to `checkpoints/v1.1/<run_name>/`, uses that name in W&B and saves a `run_config.json` next to the adapter (hyperparameters, pairs file and its sha256, pair count, optimizer steps, library versions).
 - **Report:** `src/notebooks/04_dpo_training_report.ipynb` covers loss, reward margin and reward accuracy for the composite and execution-only runs, overlaid and read from `trainer_state.json`, plus Base vs. SFT vs. DPO pass@1. Reward accuracy reaches 1.00 in both.
 
 ---
@@ -366,8 +400,11 @@ This gives two clean contrasts:
 - **`src/evaluation/report_utils.py`** holds the statistics shared by the notebooks:
   - Wilson intervals for pass@1;
   - bootstrap intervals for CC and lint differences, paired over problems;
+  - the exact McNemar test for paired pass/fail results, and the no-op check (`is_noop`, `noop_rate`);
   - the evaluation-provenance check;
   - `trainer_state.json` readers.
+- **`scripts/eval_checkpoint.sh <name> <base> <adapter>`** (v1.1) evaluates one adapter with exactly the per-model flags of `05_run_eval_harness.sh`, then adds that model's CC and lint rows to the static-analysis file and keeps every other model's. `static_analysis.py` finds every `*_generations_<lang>.json` on its own.
+- **`src/evaluation/per_problem.py`** (v1.1) re-executes the saved generations as `humaneval-chat` does and stores pass/fail per problem, which the paired tests need. It reproduces the harness's pass@1 for all ten v1.0 and v1.1 runs.
 - **`src/notebooks/05_evaluation_report.ipynb`**, ⭐ the core notebook:
   - provenance check and pass@1 with CIs;
   - static-analysis table;
@@ -385,6 +422,7 @@ This gives two clean contrasts:
 | `03_preference_generation_report` | `data/preferences/dpo_report.jsonl` | case mix, score margins, CC/lint by case |
 | `04_dpo_training_report` | `checkpoints/dpo*/**/trainer_state.json`, metrics | DPO curves for both runs, Base vs. SFT vs. DPO |
 | `05_evaluation_report` ⭐ | metrics, static analysis, preference reports | the full comparison with provenance and CIs |
+| `06_v1.1_dpo_recipe` | `data/preferences/noop_audit.json`, metrics, per-problem results, static analysis, `checkpoints/{dpo*,v1.1/*}/**/trainer_state.json` | the no-op audit of the pairs, v1.0 vs. v1.1, the lr × epochs 2×2, exact McNemar tests, reward-accuracy curves, verdicts on both hypotheses |
 
 The notebooks keep their outputs, so GitHub shows the charts. To regenerate everything from a clean kernel:
 
@@ -427,7 +465,8 @@ uv run python -m src.training.grpo_trainer
 - **CC and lint cover every generation, passing or not.** An empty or unfinished function body scores CC 1 and 0 lint errors. Restricting them to solutions that pass the tests is v2's clean-pass@1.
 - **Train/eval shape mismatch.** 84.6% of training prompts are in-context edits; HumanEval is write-from-spec.
 - **Proxy quality metrics.** CC (max over a sample's functions) and lint counts are proxies for maintainability, not human judgement. Lint thresholds differ per language.
-- **Single seed and fixed hyperparameters** for SFT and DPO, with no sweeps. DPO reused SFT's learning rate (2e-4) for 3 epochs.
+- **One seed per run, and no validation split.** SFT used one fixed recipe. DPO reused SFT's learning rate (2e-4) for 3 epochs in v1.0; v1.1 varied the learning rate and epochs in five runs on the same pairs, judged on HumanEval itself.
+- **The no-op hypothesis is measured, not tested causally.** v1.1 shows the bias in the pairs (finding 5); the runs trained without the flagged pairs were not run.
 - **Linter bugs in the v1.0 curation and preference runs.** The released data and the trained models keep them; nothing was re-run.
   - The lint gate was inactive for C++, JavaScript and TypeScript: `cpplint` 2.x prints its total on stdout while the parser read stderr, and ESLint ≥ 9 rejects `--no-eslintrc`, which parsed as 0 violations. Their `R_style` term was always 0.
   - `ruff` counts included its summary line, so every Python count is 1–2 too high and the ≤3 threshold admitted only 1–2 real violations.
@@ -441,9 +480,9 @@ v1.0 is this pipeline. v2 turns it into a benchmark in the style of Hugging Face
 - **Headline metric:** clean-pass@1, meaning the solution passes the tests, has zero lint violations and max CC ≤ 10.
 - **Evaluation:** HumanEval+ and MBPP+.
 - **Base model:** `Qwen2.5-Coder-1.5B` (base, not instruct), where SFT has room to help ([finding 2](#what-v10-found)).
-- **Learning rate chosen per method** on a validation split, instead of one recipe shared by SFT and DPO ([finding 3](#what-v10-found)).
-- **Preference pairs checked against tests**, not "runs without errors" ([finding 6](#what-v10-found)).
-- Design and milestones are in [`benchmarks/README.md`](benchmarks/README.md).
+- **Learning rate and epochs chosen per method** on a validation split, instead of one recipe shared by SFT and DPO ([finding 3](#what-v10-found); v1.1 showed the epoch count matters as much as the rate).
+- **Preference pairs checked against tests**, not "runs without errors", and filtered for no-ops ([finding 6](#what-v10-found), [v1.1 finding 5](#what-v11-found)).
+- Design, milestones, and the later distillation, quantization and serving work (v2.x–v3.0) are in [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
@@ -452,6 +491,7 @@ v1.0 is this pipeline. v2 turns it into a benchmark in the style of Hugging Face
 ```
 codealign/
 ├── README.md
+├── ROADMAP.md                  # v2.x–v3.0 plan
 ├── LICENSE
 ├── pyproject.toml / uv.lock
 ├── .env.example
@@ -461,11 +501,12 @@ codealign/
 │   ├── sft/{final_model,merged_model}/
 │   ├── dpo/                    # composite reward
 │   ├── dpo_ablation/           # execution-only reward
-│   └── dpo_composite_matched/  # composite reward, size-matched control
+│   ├── dpo_composite_matched/  # composite reward, size-matched control
+│   └── v1.1/<run_name>/        # v1.1 DPO re-runs, each with run_config.json
 ├── data/                       # gitignored (the curated set is on the HF Hub)
 │   ├── curated/                # pristine / rejected / report .jsonl
-│   ├── preferences/            # dpo_dataset.jsonl, dpo_report.jsonl
-│   └── evaluation/             # generations, metrics, static analysis, qualitative samples
+│   ├── preferences/            # dpo_dataset.jsonl, dpo_report.jsonl, noop_audit.json
+│   └── evaluation/             # generations, metrics, per-problem results, static analysis, qualitative samples
 ├── src/
 │   ├── data_curation/
 │   │   ├── curation_config.py  # language/license whitelists, per-language lint thresholds
@@ -482,30 +523,34 @@ codealign/
 │   │   ├── candidate_generator.py
 │   │   ├── docker_sandbox.py   # gRPC client → Rust daemon
 │   │   ├── preference_orchestrator.py
+│   │   ├── noop.py             # no-op checks (all comments, no definitions, gutted edit)
 │   │   ├── executor_pb2.py / executor_pb2_grpc.py   # generated
 │   │   └── main.py
 │   ├── training/
 │   │   ├── sft_config.py / sft_trainer.py / merge_sft.py
-│   │   ├── dpo_config.py / dpo_trainer.py           # --reward_mode composite | execution_only | composite_matched
+│   │   ├── dpo_config.py / dpo_trainer.py           # --reward_mode composite | execution_only | composite_matched; v1.1 overrides
 │   │   └── grpo_config.py / grpo_trainer.py
 │   ├── evaluation/
 │   │   ├── evaluation_config.py
 │   │   ├── humaneval_chat_prompts.py   # EvalPlus chat prompts, rendered with the model's template
 │   │   ├── static_analysis.py
 │   │   ├── extract_qualitative.py
-│   │   └── report_utils.py     # CIs, provenance checks, trainer_state readers
-│   └── notebooks/              # 01–05 report notebooks
+│   │   ├── per_problem.py      # pass/fail per HumanEval problem, for paired tests
+│   │   └── report_utils.py     # CIs, McNemar, no-op rate, provenance checks, trainer_state readers
+│   └── notebooks/              # 01–06 report notebooks
 ├── scripts/
 │   ├── 01_curate_data.sh
 │   ├── 02_run_sft.sh
 │   ├── 03_04_run_dpo_pipeline.sh
 │   ├── 05_run_eval_harness.sh
 │   ├── setup_eval_harness.sh   # pinned harness + patches into tools/
+│   ├── eval_checkpoint.sh      # evaluate one adapter with 05's flags (v1.1)
 │   ├── make_size_matched_pairs.py
+│   ├── audit_preference_pairs.py   # no-op audit of the pairs (v1.1)
+│   ├── filter_noop_pairs.py    # pairs without no-op chosen candidates (optional v1.1 arms)
 │   └── publish_hf_dataset.py
 ├── patches/                    # bigcode-evaluation-harness fixes
 ├── tools/                      # gitignored: harness clone
-├── benchmarks/                 # v2 design
 ├── demo/                       # Gradio app
 ├── docker/Dockerfile.executor  # multi-language sandbox
 └── rust-daemon/                # gRPC execution daemon (tonic + tokio)
@@ -514,8 +559,8 @@ codealign/
 ## Setup and reproduction
 
 ```bash
-git clone https://github.com/<user>/codealign.git
-cd codealign
+git clone https://github.com/Sergasgr/CodeAlign.git
+cd CodeAlign
 uv sync                        # includes the pinned harness package (dev group)
 cp .env.example .env           # WANDB_API_KEY, HF_TOKEN
 
@@ -548,12 +593,21 @@ uv run python -m src.training.dpo_trainer --reward_mode composite_matched
 bash scripts/setup_eval_harness.sh     # once
 bash scripts/05_run_eval_harness.sh python
 
+# v1.1 — DPO re-runs on the same pairs (all five runs and their names: ROADMAP.md §1.5)
+uv run python scripts/audit_preference_pairs.py \
+    data/preferences/dpo_report.jsonl data/preferences/dpo_report_exec_only.jsonl
+uv run python -m src.training.dpo_trainer --reward_mode execution_only \
+    --learning_rate 2e-4 --num_train_epochs 1 --run_name v11-exec-lr2e-4-e1
+bash scripts/eval_checkpoint.sh v11_exec_lr2e_4_e1 checkpoints/sft/merged_model \
+    checkpoints/v1.1/v11-exec-lr2e-4-e1/final_model
+uv run python -m src.evaluation.per_problem --language python
+
 # Reports and demo
 uv run jupyter nbconvert --to notebook --execute --inplace src/notebooks/*.ipynb
 uv run python -m demo.app
 ```
 
-The dataset release is `uv run python scripts/publish_hf_dataset.py --repo-id <user>/codealign-commitpackft --github-url https://github.com/<user>/codealign --dry-run`. Drop `--dry-run` to push.
+The dataset release is `uv run python scripts/publish_hf_dataset.py --repo-id Sergasgr/codealign-commitpackft --github-url https://github.com/Sergasgr/CodeAlign --dry-run`. Drop `--dry-run` to push.
 
 ## Rust executor daemon
 

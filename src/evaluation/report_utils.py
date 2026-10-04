@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections import Counter
 from pathlib import Path
+
+from src.preference_generation.noop import filter_comments
 
 import numpy as np
 import pandas as pd
@@ -196,3 +199,26 @@ def describe_diff(result: dict | None, lower_is_better: bool = True) -> str:
         return f"{ci} → CI includes 0: no detectable difference at n={result['n']}"
     better = (result["diff"] < 0) == lower_is_better
     return f"{ci} → {'lower' if result['diff'] < 0 else 'higher'} ({'better' if better else 'worse'})"
+
+def mcnemar_exact(passes_a: list[bool], passes_b: list[bool]) -> float:
+    if len(passes_a) != len(passes_b):
+        raise ValueError("The lists of results must have the same length.")
+    b = sum(1 for x, y in zip(passes_a, passes_b, strict=True) if x and not y)
+    c = sum(1 for x, y in zip(passes_a, passes_b, strict=True) if not x and y)
+    if b + c == 0:
+        return 1.0
+    n = b + c
+    return min(1.0, 2 * sum(math.comb(n, i) for i in range(min(b, c) + 1)) / 2**n)
+
+def defines_function(code: str, name: str) -> bool:
+    return re.search(rf"^[ \t]*(?:async[ \t]+)?def[ \t]+{re.escape(name)}[ \t]*\(", code, re.MULTILINE) is not None
+
+def is_noop(generation: str, entry_point: str) -> bool:
+    return filter_comments(generation, language="python") or not defines_function(generation, entry_point)
+
+def noop_rate(generations: list[str], entry_points: list[str]) -> float:
+    noop_count = 0
+    for gen, ep in zip(generations, entry_points, strict=True):
+        if is_noop(gen, ep):
+            noop_count += 1
+    return noop_count / len(generations) if generations else 0.0
