@@ -4,7 +4,7 @@ Post-training pipeline for a coding LLM (SFT → DPO) whose preference pairs are
 
 **Base model:** `Qwen2.5-Coder-7B-Instruct` · **Data:** CommitPackFT, 8 languages · **Training:** QLoRA SFT + DPO (TRL, PEFT) on one consumer GPU · **Sandbox:** Docker via a Rust gRPC daemon · **Evaluation:** HumanEval pass@1 + cyclomatic complexity + lint
 
-**Releases:** [v1.0](https://github.com/Sergasgr/CodeAlign/releases/tag/v1.0), the full pipeline run once ([results](#results-v10)) · [v1.1](https://github.com/Sergasgr/CodeAlign/releases/tag/v1.1), DPO re-trained with other learning rates and epoch counts to find what caused v1.0's results ([results](#results-v11)) · next: [ROADMAP.md](ROADMAP.md)
+**Releases:** [v1.0](https://github.com/Sergasgr/CodeAlign/releases/tag/v1.0), the full pipeline run once ([results](#results-v10)) · [v1.1](https://github.com/Sergasgr/CodeAlign/releases/tag/v1.1), DPO re-trained with other learning rates and epoch counts to find what caused v1.0's results ([results](#results-v11))
 
 ## Project context
 
@@ -473,16 +473,6 @@ uv run python -m src.training.grpo_trainer
   - `cpplint` and `ruff` are fixed in the code; ESLint is left for v2.
 - **Languages missing from the preference data.** Java, C# and Go produced no pairs, and no TypeScript candidate executed ([Phase 3 outcome](#outcome-1)).
 - **13 of the 2,704 Case C pairs have equal composite scores** up to float rounding: ties labelled as preferences by the v1.0 orchestrator, fixed afterwards.
-
-## Roadmap (v2)
-
-v1.0 is this pipeline. v2 turns it into a benchmark in the style of Hugging Face PEFT's [`method_comparison/`](https://github.com/huggingface/peft/tree/main/method_comparison). With a small SFT set and training parameters shared by every method, it asks which PEFT method gives the best code, then which alignment objective, online RL or distillation step on top.
-- **Headline metric:** clean-pass@1, meaning the solution passes the tests, has zero lint violations and max CC ≤ 10.
-- **Evaluation:** HumanEval+ and MBPP+.
-- **Base model:** `Qwen2.5-Coder-1.5B` (base, not instruct), where SFT has room to help ([finding 2](#what-v10-found)).
-- **Learning rate and epochs chosen per method** on a validation split, instead of one recipe shared by SFT and DPO ([finding 3](#what-v10-found); v1.1 showed the epoch count matters as much as the rate).
-- **Preference pairs checked against tests**, not "runs without errors", and filtered for no-ops ([finding 6](#what-v10-found), [v1.1 finding 5](#what-v11-found)).
-- Design, milestones, and the later distillation, quantization and serving work (v2.x–v3.0) are in [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
