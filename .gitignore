@@ -63,3 +63,5 @@ tools/
 data/hf_release/
 data/**/*.jsonl
 checkpoints/
+
+ROADMAP.md
